@@ -1,12 +1,191 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { monthStart, monthEnd } from '@/lib/shifts';
+import { monthStart, monthEnd, generateTimeSlots, formatDate, getDaysInMonth } from '@/lib/shifts';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
-import type { Shift, User } from '@/lib/types';
+import type { Shift, User, ShiftType } from '@/lib/types';
+import { SHIFT_PRESETS, SHIFT_COLORS } from '@/lib/types';
 
 type ViewMode = 'table' | 'timeline';
+
+interface ModalState {
+  userId: string;
+  date: string;
+  shift?: Shift;
+}
+
+const TIME_SLOTS = generateTimeSlots();
+
+function ShiftModal({
+  state,
+  users,
+  year,
+  month,
+  onClose,
+  onSaved,
+}: {
+  state: ModalState;
+  users: User[];
+  year: number;
+  month: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const existing = state.shift;
+  const [userId, setUserId] = useState(state.userId);
+  const [date, setDate] = useState(state.date);
+  const [shiftType, setShiftType] = useState<ShiftType>(existing?.shift_type ?? 'A');
+  const [startTime, setStartTime] = useState(existing?.start_time ?? SHIFT_PRESETS.A.start);
+  const [endTime, setEndTime] = useState(existing?.end_time ?? SHIFT_PRESETS.A.end);
+  const [comment, setComment] = useState(existing?.comment ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const days = getDaysInMonth(year, month);
+  const dateOptions = days.map(d => formatDate(d));
+
+  function selectPreset(type: Exclude<ShiftType, 'custom'>) {
+    setShiftType(type);
+    setStartTime(SHIFT_PRESETS[type].start);
+    setEndTime(SHIFT_PRESETS[type].end);
+  }
+
+  const handleSave = async () => {
+    setError('');
+    if (!userId) return setError('スタッフを選択してください');
+    if (!date) return setError('日付を選択してください');
+    if (startTime >= endTime) return setError('終了時刻は開始時刻より後にしてください');
+    setSaving(true);
+    if (existing) {
+      const { error: e } = await supabase.from('shifts').update({
+        user_id: userId, date, shift_type: shiftType, start_time: startTime, end_time: endTime, comment,
+      }).eq('id', existing.id);
+      if (e) { setError(e.message); setSaving(false); return; }
+    } else {
+      const { error: e } = await supabase.from('shifts').upsert(
+        { user_id: userId, date, shift_type: shiftType, start_time: startTime, end_time: endTime, comment, status: 'confirmed' },
+        { onConflict: 'user_id,date' }
+      );
+      if (e) { setError(e.message); setSaving(false); return; }
+    }
+    setSaving(false);
+    onSaved();
+  };
+
+  const handleDelete = async () => {
+    if (!existing) return;
+    await supabase.from('shifts').delete().eq('id', existing.id);
+    onSaved();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm">
+        <h3 className="text-base font-bold text-slate-800 mb-4">
+          {existing ? 'シフトを編集' : 'シフトを追加'}
+        </h3>
+
+        <div className="space-y-3">
+          {/* スタッフ */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">スタッフ</label>
+            <select value={userId} onChange={e => setUserId(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+              <option value="">選択してください</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+
+          {/* 日付 */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">日付</label>
+            <select value={date} onChange={e => setDate(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+              {dateOptions.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+
+          {/* シフト種別 */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">シフト種別</label>
+            <div className="grid grid-cols-4 gap-1 mb-2">
+              {(Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom'>[]).map(type => (
+                <button
+                  key={type}
+                  onClick={() => selectPreset(type)}
+                  className="py-1.5 rounded-lg text-xs font-bold text-white transition-opacity"
+                  style={{
+                    backgroundColor: SHIFT_COLORS[type],
+                    opacity: shiftType === type ? 1 : 0.4,
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+              <button
+                onClick={() => setShiftType('custom')}
+                className="py-1.5 rounded-lg text-xs font-bold text-white col-span-2 transition-opacity"
+                style={{ backgroundColor: SHIFT_COLORS.custom, opacity: shiftType === 'custom' ? 1 : 0.4 }}
+              >
+                カスタム
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <select value={startTime} onChange={e => setStartTime(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <span className="text-slate-400 text-sm">〜</span>
+              <select value={endTime} onChange={e => setEndTime(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* コメント */}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">コメント（任意）</label>
+            <input type="text" value={comment} onChange={e => setComment(e.target.value)}
+              placeholder="備考など"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+        </div>
+
+        {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+
+        <div className="flex gap-2 mt-4">
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50">
+            {saving ? '保存中…' : '保存'}
+          </button>
+          <button onClick={onClose}
+            className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200">
+            キャンセル
+          </button>
+        </div>
+
+        {existing && !showDeleteConfirm && (
+          <button onClick={() => setShowDeleteConfirm(true)}
+            className="w-full mt-2 py-2 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors">
+            このシフトを削除
+          </button>
+        )}
+        {existing && showDeleteConfirm && (
+          <div className="mt-3 p-3 bg-red-50 rounded-xl">
+            <p className="text-sm text-red-700 mb-2">本当に削除しますか？</p>
+            <div className="flex gap-2">
+              <button onClick={handleDelete} className="flex-1 py-2 bg-red-600 text-white text-sm rounded-xl hover:bg-red-700">削除する</button>
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2 bg-slate-100 text-slate-600 text-sm rounded-xl">戻る</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminSchedulePage() {
   const now = new Date();
@@ -16,6 +195,7 @@ export default function AdminSchedulePage() {
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [modal, setModal] = useState<ModalState | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -57,10 +237,21 @@ export default function AdminSchedulePage() {
     setIsConfirming(false);
   };
 
+  const handleCellClick = (userId: string, date: string, shift?: Shift) => {
+    setModal({ userId, date, shift });
+  };
+
+  const handleModalSaved = () => {
+    setModal(null);
+  };
+
   const draftCount = shifts.filter(s => s.status === 'draft').length;
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
+
+  // 今月の最初の日付を取得（シフト追加デフォルト用）
+  const firstDateOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
 
   return (
     <div>
@@ -71,6 +262,12 @@ export default function AdminSchedulePage() {
           <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600">▶</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setModal({ userId: users[0]?.id ?? '', date: firstDateOfMonth })}
+            className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+          >
+            + シフト追加
+          </button>
           {draftCount > 0 && (
             <button onClick={handleConfirmAll} disabled={isConfirming}
               className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-xl hover:bg-green-700 disabled:opacity-50">
@@ -100,8 +297,19 @@ export default function AdminSchedulePage() {
       </div>
 
       {view === 'table'
-        ? <TableView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} />
+        ? <TableView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onCellClick={handleCellClick} />
         : <TimelineView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} />}
+
+      {modal && (
+        <ShiftModal
+          state={modal}
+          users={users}
+          year={year}
+          month={month}
+          onClose={() => setModal(null)}
+          onSaved={handleModalSaved}
+        />
+      )}
     </div>
   );
 }

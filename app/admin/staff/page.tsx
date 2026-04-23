@@ -4,6 +4,19 @@ import { supabase } from '@/lib/supabase';
 import { hashPin } from '@/lib/shifts';
 import type { User, UserRole } from '@/lib/types';
 
+function PinCell({ pin }: { pin?: string }) {
+  const [visible, setVisible] = useState(false);
+  if (!pin) return <span className="text-slate-300 text-xs">—</span>;
+  return (
+    <button
+      onClick={() => setVisible(v => !v)}
+      className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 tracking-widest select-all"
+    >
+      {visible ? pin : '••••'}
+    </button>
+  );
+}
+
 export default function AdminStaffPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -29,7 +42,7 @@ export default function AdminStaffPage() {
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
 
   const loadUsers = async () => {
-    const { data } = await supabase.from('users').select('id, name, role, created_at').order('name');
+    const { data } = await supabase.from('users').select('id, name, role, pin, created_at').order('name');
     setUsers(data ?? []);
   };
 
@@ -50,7 +63,7 @@ export default function AdminStaffPage() {
     if (addPin !== addPinConfirm) return setAddError('PINが一致しません');
     setAddSaving(true);
     const pin_hash = await hashPin(addPin);
-    const { error } = await supabase.from('users').insert({ name: addName.trim(), pin_hash, role: addRole });
+    const { error } = await supabase.from('users').insert({ name: addName.trim(), pin_hash, pin: addPin, role: addRole });
     setAddSaving(false);
     if (error) { setAddError(error.message.includes('unique') ? 'この名前は既に登録されています' : error.message); return; }
     setAddName(''); setAddPin(''); setAddPinConfirm(''); setAddRole('staff');
@@ -76,7 +89,7 @@ export default function AdminStaffPage() {
     if (editPin && editPin !== editPinConfirm) return setEditError('PINが一致しません');
     setEditSaving(true);
     const patch: Record<string, string> = { name: editName.trim(), role: editRole };
-    if (editPin) patch.pin_hash = await hashPin(editPin);
+    if (editPin) { patch.pin_hash = await hashPin(editPin); patch.pin = editPin; }
     const { error } = await supabase.from('users').update(patch).eq('id', editTarget.id);
     setEditSaving(false);
     if (error) { setEditError(error.message); return; }
@@ -154,6 +167,7 @@ export default function AdminStaffPage() {
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">名前</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">権限</th>
+                <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">PIN</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap hidden sm:table-cell">登録日</th>
                 <th className="px-5 py-3" />
               </tr>
@@ -173,6 +187,9 @@ export default function AdminStaffPage() {
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${u.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
                       {u.role === 'admin' ? '管理者' : 'スタッフ'}
                     </span>
+                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <PinCell pin={u.pin} />
                   </td>
                   <td className="px-5 py-3 text-slate-400 hidden sm:table-cell whitespace-nowrap">
                     {new Date(u.created_at).toLocaleDateString('ja-JP')}

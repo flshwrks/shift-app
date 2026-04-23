@@ -10,13 +10,14 @@ interface Props {
   shifts: Shift[];
   isAdmin?: boolean;
   onConfirm?: (shiftId: string) => void;
+  onCellClick?: (userId: string, date: string, shift?: Shift) => void;
 }
 
 function getShiftLabel(s: Shift): string {
   return `${s.shift_type === 'custom' ? '' : s.shift_type + ' '}${s.start_time}〜${s.end_time}`;
 }
 
-export default function TableView({ year, month, users, shifts, isAdmin, onConfirm }: Props) {
+export default function TableView({ year, month, users, shifts, isAdmin, onConfirm, onCellClick }: Props) {
   const days = getDaysInMonth(year, month);
 
   const shiftMap: Record<string, Record<string, Shift>> = {};
@@ -59,7 +60,11 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                 const key = formatDate(d);
                 const s = shiftMap[u.id]?.[key];
                 return (
-                  <td key={key} className="px-1 py-1.5 border-r border-slate-100 text-center align-middle">
+                  <td
+                    key={key}
+                    className={`px-1 py-1.5 border-r border-slate-100 text-center align-middle ${isAdmin && onCellClick ? 'cursor-pointer hover:bg-blue-50/50' : ''}`}
+                    onClick={() => isAdmin && onCellClick && onCellClick(u.id, key, s)}
+                  >
                     {s ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <span
@@ -70,7 +75,7 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                         </span>
                         {isAdmin && s.status === 'draft' && onConfirm && (
                           <button
-                            onClick={() => onConfirm(s.id)}
+                            onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
                             className="text-[10px] text-blue-600 hover:underline"
                           >
                             確定
@@ -81,7 +86,7 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                         )}
                       </div>
                     ) : (
-                      <span className="text-slate-200">—</span>
+                      <span className="text-slate-200">+</span>
                     )}
                   </td>
                 );
