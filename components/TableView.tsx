@@ -77,12 +77,15 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                           {getShiftLabel(s)}
                           {s.comment && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-90 flex-shrink-0" />}
                         </button>
-                        {isAdmin && s.status === 'draft' && onConfirm && (
+                        {s.status === 'draft' && (
+                          <span className="text-[10px] text-amber-600 font-medium">申請中</span>
+                        )}
+                        {s.status === 'draft' && isAdmin && onConfirm && (
                           <button
                             onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
-                            className="text-[10px] text-blue-600 hover:underline"
+                            className="text-[10px] px-1.5 py-px rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
                           >
-                            確定
+                            確定する
                           </button>
                         )}
                         {s.status === 'confirmed' && (

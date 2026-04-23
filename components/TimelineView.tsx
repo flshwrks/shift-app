@@ -222,7 +222,7 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                             onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
                             className="mx-1 mb-0.5 mt-auto text-[9px] bg-white/30 hover:bg-white/50 text-white rounded px-1 py-px"
                           >
-                            確定
+                            確定する
                           </button>
                         )}
                       </div>
