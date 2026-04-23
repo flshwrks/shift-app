@@ -55,16 +55,22 @@ export default function ShiftsPage() {
   const loadShifts = useCallback(async () => {
     if (!user) return;
     const ym = formatYM(year, month);
-    const { data } = await supabase.from('shifts').select('*')
-      .eq('user_id', user.id).gte('date', `${ym}-01`).lte('date', `${ym}-31`);
-    setShifts(() => {
-      const next: Record<string, DayShift> = {};
-      getDaysInMonth(year, month).forEach(d => { next[formatDate(d)] = defaultDay(); });
-      (data ?? []).forEach((s: Shift) => {
-        next[s.date] = { shiftType: s.shift_type, startTime: s.start_time, endTime: s.end_time, comment: s.comment ?? '', dirty: false, existingId: s.id, status: s.status };
-      });
-      return next;
+    const { data, error } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('date', `${ym}-01`)
+      .lte('date', `${ym}-31`);
+    if (error) { console.error('loadShifts error:', error); return; }
+    const next: Record<string, DayShift> = {};
+    getDaysInMonth(year, month).forEach(d => { next[formatDate(d)] = defaultDay(); });
+    (data ?? []).forEach((s: Shift) => {
+      next[s.date] = {
+        shiftType: s.shift_type, startTime: s.start_time, endTime: s.end_time,
+        comment: s.comment ?? '', dirty: false, existingId: s.id, status: s.status,
+      };
     });
+    setShifts(next);
   }, [user, year, month]);
 
   useEffect(() => { loadShifts(); }, [loadShifts]);
@@ -103,22 +109,39 @@ export default function ShiftsPage() {
   const handleSubmitAll = async () => {
     if (!user || isDeadlinePassed) return;
     setSubmitting(true);
+
     const entries = Object.entries(shifts).filter(([, s]) => s.dirty);
-    for (const [date, s] of entries) {
-      if (!s.shiftType) {
-        if (s.existingId) await supabase.from('shifts').delete().eq('id', s.existingId);
-        setShifts(prev => ({ ...prev, [date]: { ...prev[date], dirty: false, existingId: undefined } }));
-        continue;
+
+    // 「休み」に変更されたものを削除
+    const toDelete = entries.filter(([, s]) => !s.shiftType && s.existingId);
+    await Promise.all(toDelete.map(([, s]) => supabase.from('shifts').delete().eq('id', s.existingId!)));
+
+    // シフトがあるものは upsert（INSERT or UPDATE を自動判定）
+    const toUpsert = entries
+      .filter(([, s]) => s.shiftType)
+      .map(([date, s]) => ({
+        user_id: user.id,
+        date,
+        shift_type: s.shiftType!,
+        start_time: s.startTime,
+        end_time: s.endTime,
+        comment: s.comment,
+        status: 'draft' as const,
+      }));
+
+    if (toUpsert.length > 0) {
+      const { error } = await supabase
+        .from('shifts')
+        .upsert(toUpsert, { onConflict: 'user_id,date' });
+      if (error) {
+        console.error('upsert error:', error);
+        setSubmitting(false);
+        return;
       }
-      const payload = { user_id: user.id, date, shift_type: s.shiftType, start_time: s.startTime, end_time: s.endTime, comment: s.comment, status: 'draft' };
-      if (s.existingId) {
-        await supabase.from('shifts').update(payload).eq('id', s.existingId);
-      } else {
-        const { data } = await supabase.from('shifts').insert(payload).select().single();
-        if (data) setShifts(prev => ({ ...prev, [date]: { ...prev[date], existingId: data.id } }));
-      }
-      setShifts(prev => ({ ...prev, [date]: { ...prev[date], dirty: false } }));
     }
+
+    // 提出後にDBから再取得して確実に同期
+    await loadShifts();
     setSubmitting(false);
     setSubmitDone(true);
     setTimeout(() => setSubmitDone(false), 3000);
