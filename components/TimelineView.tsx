@@ -8,7 +8,7 @@ const START_HOUR = 8;
 const END_HOUR = 22;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
-const COL_WIDTH = 112;
+const COL_WIDTH = 128;
 const TIME_COL_WIDTH = 44;
 const COUNT_BAR_HEIGHT = 48;
 const HEADER_HEIGHT = 40;
@@ -186,6 +186,13 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                     const w = COL_WIDTH / totalLanes;
                     const l = (lane / totalLanes) * COL_WIDTH;
                     const staffUser = users.find((u) => u.id === s.user_id);
+                    const name = staffUser?.name ?? '?';
+
+                    // ブロック幅に応じて表示を段階的に変える
+                    const showFullName = w >= 72;
+                    const showShortName = w >= 40 && !showFullName;
+                    const showTimeRow = w >= 56 && height > 28;
+                    const showConfirm = isAdmin && s.status === 'draft' && onConfirm && height > 44 && w >= 44;
 
                     return (
                       <div
@@ -199,23 +206,34 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                           backgroundColor: SHIFT_COLORS[s.shift_type] + 'CC',
                           borderLeft: `3px solid ${SHIFT_COLORS[s.shift_type]}`,
                         }}
-                        title={s.comment ? `${staffUser?.name ?? ''}: ${s.comment}` : undefined}
+                        title={`${name}  ${s.start_time}〜${s.end_time}${s.comment ? `  ${s.comment}` : ''}`}
                       >
-                        <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
-                          <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm flex-1 min-w-0">
-                            {staffUser?.name ?? '?'}
-                          </span>
-                          {/* コメントインジケーター */}
-                          {s.comment && (
-                            <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
-                          )}
-                        </div>
-                        {height > 28 && (
+                        {showFullName && (
+                          <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
+                            <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm flex-1 min-w-0">
+                              {name}
+                            </span>
+                            {s.comment && (
+                              <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
+                            )}
+                          </div>
+                        )}
+                        {showShortName && (
+                          <div className="flex items-center justify-between px-0.5 pt-0.5 gap-0.5">
+                            <span className="text-white text-[10px] font-bold leading-none drop-shadow-sm truncate">
+                              {name.slice(0, 2)}
+                            </span>
+                            {s.comment && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0 opacity-90" />
+                            )}
+                          </div>
+                        )}
+                        {showTimeRow && (
                           <span className="text-white/90 text-[9px] leading-tight truncate px-1">
                             {s.start_time}〜{s.end_time}
                           </span>
                         )}
-                        {isAdmin && s.status === 'draft' && onConfirm && height > 40 && (
+                        {showConfirm && (
                           <button
                             onClick={() => onConfirm(s.id)}
                             className="mx-1 mb-0.5 mt-auto text-[9px] bg-white/30 hover:bg-white/50 text-white rounded px-1 py-px"

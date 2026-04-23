@@ -158,7 +158,7 @@ export default function AdminStaffPage() {
       )}
 
       {/* スタッフ一覧 */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
         {users.length === 0 ? (
           <p className="text-center text-slate-400 py-12 text-sm">スタッフが登録されていません</p>
         ) : (
