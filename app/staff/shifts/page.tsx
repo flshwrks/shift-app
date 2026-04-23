@@ -52,7 +52,6 @@ export default function ShiftsPage() {
 
   const loadShifts = useCallback(async () => {
     if (!user) return;
-    const ym = formatYM(year, month);
     const { data, error } = await supabase
       .from('shifts')
       .select('*')
@@ -68,10 +67,46 @@ export default function ShiftsPage() {
         comment: s.comment ?? '', dirty: false, existingId: s.id, status: s.status,
       };
     });
+    // localStorage に保存された未提出の下書きを復元
+    const draftKey = `shift_draft_${user.id}_${formatYM(year, month)}`;
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      try {
+        const drafts = JSON.parse(saved) as Record<string, DayShift>;
+        Object.entries(drafts).forEach(([date, s]) => {
+          if (next[date] !== undefined) next[date] = s;
+        });
+      } catch { localStorage.removeItem(draftKey); }
+    }
     setShifts(next);
   }, [user, year, month]);
 
   useEffect(() => { loadShifts(); }, [loadShifts]);
+
+  // 未提出の変更を localStorage に自動保存
+  useEffect(() => {
+    if (!user || Object.keys(shifts).length === 0) return;
+    const draftKey = `shift_draft_${user.id}_${formatYM(year, month)}`;
+    const dirty = Object.fromEntries(Object.entries(shifts).filter(([, s]) => s.dirty));
+    if (Object.keys(dirty).length > 0) {
+      localStorage.setItem(draftKey, JSON.stringify(dirty));
+    } else {
+      localStorage.removeItem(draftKey);
+    }
+    window.dispatchEvent(new Event('storage'));
+  }, [shifts, user, year, month]);
+
+  // ブラウザ離脱・更新時の警告
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (Object.values(shifts).some(s => s.dirty)) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [shifts]);
 
   // ポップアップ内の一時編集状態
   const [editShift, setEditShift] = useState<DayShift>(defaultDay());
@@ -138,7 +173,9 @@ export default function ShiftsPage() {
       }
     }
 
-    // 提出後にDBから再取得して確実に同期
+    // 提出成功 → localStorage の下書きを削除してからDB再取得
+    localStorage.removeItem(`shift_draft_${user.id}_${formatYM(year, month)}`);
+    window.dispatchEvent(new Event('storage'));
     await loadShifts();
     setSubmitting(false);
     setSubmitDone(true);

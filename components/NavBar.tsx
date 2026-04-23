@@ -21,6 +21,7 @@ export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const [orgName, setOrgName] = useState('');
+  const [hasDraft, setHasDraft] = useState(false);
 
   useEffect(() => {
     supabase.from('app_settings').select('value').eq('key', 'org_name').single()
@@ -35,6 +36,18 @@ export default function NavBar() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // localStorage に未提出の下書きがあるか確認（スタッフのみ）
+  useEffect(() => {
+    if (!user || user.role !== 'staff') return;
+    const prefix = `shift_draft_${user.id}_`;
+    const check = () => {
+      setHasDraft(Object.keys(localStorage).some(k => k.startsWith(prefix)));
+    };
+    check();
+    window.addEventListener('storage', check);
+    return () => window.removeEventListener('storage', check);
+  }, [user]);
 
   const navItems = user?.role === 'admin' ? adminNav : staffNav;
 
@@ -70,6 +83,7 @@ export default function NavBar() {
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex sm:hidden">
         {navItems.map(item => {
           const active = pathname === item.href;
+          const showBadge = hasDraft && item.href === '/staff/shifts' && !active;
           return (
             <Link
               key={item.href}
@@ -79,7 +93,12 @@ export default function NavBar() {
               }`}
             >
               {active && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-b" />}
-              <span className="text-xl leading-none">{item.icon}</span>
+              <span className="text-xl leading-none relative">
+                {item.icon}
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white" />
+                )}
+              </span>
               <span>{item.label}</span>
             </Link>
           );
@@ -89,17 +108,23 @@ export default function NavBar() {
       {/* デスクトップ用横ナビ */}
       <div className="hidden sm:block bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 flex gap-1 py-1">
-          {navItems.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                pathname === item.href ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map(item => {
+            const showBadge = hasDraft && item.href === '/staff/shifts' && pathname !== item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  pathname === item.href ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {item.label}
+                {showBadge && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                )}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </>
