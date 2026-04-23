@@ -204,12 +204,13 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                         onClick={() => onShiftClick?.(s)}
                         title={`${name}  ${s.start_time}〜${s.end_time}${s.comment ? `  ${s.comment}` : ''}`}
                       >
-                        {/* 名前行（フルネーム・省略なし） */}
+                        {/* 名前行（幅が狭い場合は2文字表示） */}
                         <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
-                          <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm flex-1 min-w-0">
-                            {name}
+                          <span className="text-white text-[10px] font-bold leading-tight drop-shadow-sm flex-1 min-w-0"
+                            style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: w >= 60 ? 'ellipsis' : 'clip' }}>
+                            {w >= 60 ? name : name.slice(0, 2)}
                           </span>
-                          {s.comment && (
+                          {s.comment && w >= 48 && (
                             <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
                           )}
                         </div>
