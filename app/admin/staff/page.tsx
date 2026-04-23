@@ -175,7 +175,7 @@ export default function AdminStaffPage() {
             <tbody className="divide-y divide-slate-100">
               {users.map(u => (
                 <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-3 font-medium text-slate-800">
+                  <td className="px-5 py-3 font-medium text-slate-800 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span className={`w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0 ${u.role === 'admin' ? 'bg-orange-500' : 'bg-blue-500'}`}>
                         {u.name[0]}

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { monthStart, monthEnd, formatDate, getDaysInMonth } from '@/lib/shifts';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
+import ShiftDetailModal from '@/components/ShiftDetailModal';
 import type { Shift, User, ShiftType } from '@/lib/types';
 import { SHIFT_PRESETS, SHIFT_COLORS } from '@/lib/types';
 
@@ -200,6 +201,7 @@ export default function AdminSchedulePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [detailShift, setDetailShift] = useState<Shift | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -244,11 +246,16 @@ export default function AdminSchedulePage() {
   };
 
   const handleCellClick = (userId: string, date: string, shift?: Shift) => {
-    setModal({ userId, date, shift });
+    if (shift) {
+      setDetailShift(shift);
+    } else {
+      setModal({ userId, date });
+    }
   };
 
   const handleModalSaved = () => {
     setModal(null);
+    setDetailShift(null);
   };
 
   const draftCount = shifts.filter(s => s.status === 'draft').length;
@@ -325,8 +332,8 @@ export default function AdminSchedulePage() {
       </div>
 
       {view === 'table'
-        ? <TableView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onCellClick={handleCellClick} />
-        : <TimelineView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} />}
+        ? <TableView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onCellClick={handleCellClick} onShiftClick={s => setDetailShift(s)} />
+        : <TimelineView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onShiftClick={s => setDetailShift(s)} />}
 
       {modal && (
         <ShiftModal
@@ -336,6 +343,20 @@ export default function AdminSchedulePage() {
           month={month}
           onClose={() => setModal(null)}
           onSaved={handleModalSaved}
+        />
+      )}
+
+      {detailShift && (
+        <ShiftDetailModal
+          shift={detailShift}
+          users={users}
+          isAdmin
+          onClose={() => setDetailShift(null)}
+          onEdit={() => { setModal({ userId: detailShift.user_id, date: detailShift.date, shift: detailShift }); setDetailShift(null); }}
+          onConfirm={async () => {
+            await handleConfirm(detailShift.id);
+            setDetailShift(prev => prev ? { ...prev, status: 'confirmed' } : null);
+          }}
         />
       )}
 

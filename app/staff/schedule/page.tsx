@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { monthStart, monthEnd } from '@/lib/shifts';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
+import ShiftDetailModal from '@/components/ShiftDetailModal';
 import type { Shift, User } from '@/lib/types';
 
 type ViewMode = 'table' | 'timeline';
@@ -15,6 +16,7 @@ export default function StaffSchedulePage() {
   const [view, setView] = useState<ViewMode>('table');
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [detailShift, setDetailShift] = useState<Shift | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -60,8 +62,16 @@ export default function StaffSchedulePage() {
       </div>
 
       {view === 'table'
-        ? <TableView year={year} month={month} users={users} shifts={shifts} />
-        : <TimelineView year={year} month={month} users={users} shifts={shifts} />}
+        ? <TableView year={year} month={month} users={users} shifts={shifts} onShiftClick={s => setDetailShift(s)} />
+        : <TimelineView year={year} month={month} users={users} shifts={shifts} onShiftClick={s => setDetailShift(s)} />}
+
+      {detailShift && (
+        <ShiftDetailModal
+          shift={detailShift}
+          users={users}
+          onClose={() => setDetailShift(null)}
+        />
+      )}
     </div>
   );
 }

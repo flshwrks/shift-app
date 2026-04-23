@@ -11,13 +11,14 @@ interface Props {
   isAdmin?: boolean;
   onConfirm?: (shiftId: string) => void;
   onCellClick?: (userId: string, date: string, shift?: Shift) => void;
+  onShiftClick?: (shift: Shift) => void;
 }
 
 function getShiftLabel(s: Shift): string {
   return `${s.shift_type === 'custom' ? '' : s.shift_type + ' '}${s.start_time}〜${s.end_time}`;
 }
 
-export default function TableView({ year, month, users, shifts, isAdmin, onConfirm, onCellClick }: Props) {
+export default function TableView({ year, month, users, shifts, isAdmin, onConfirm, onCellClick, onShiftClick }: Props) {
   const days = getDaysInMonth(year, month);
 
   const shiftMap: Record<string, Record<string, Shift>> = {};
@@ -67,14 +68,15 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                   >
                     {s ? (
                       <div className="flex flex-col items-center gap-0.5">
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-white font-bold text-xs"
+                        <button
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-white font-bold text-xs hover:brightness-110 transition-[filter]"
                           style={{ backgroundColor: SHIFT_COLORS[s.shift_type] }}
                           title={s.comment || undefined}
+                          onClick={e => { e.stopPropagation(); onShiftClick?.(s); }}
                         >
                           {getShiftLabel(s)}
                           {s.comment && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-90 flex-shrink-0" />}
-                        </span>
+                        </button>
                         {isAdmin && s.status === 'draft' && onConfirm && (
                           <button
                             onClick={e => { e.stopPropagation(); onConfirm(s.id); }}

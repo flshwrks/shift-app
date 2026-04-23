@@ -22,6 +22,7 @@ interface Props {
   shifts: Shift[];
   isAdmin?: boolean;
   onConfirm?: (shiftId: string) => void;
+  onShiftClick?: (shift: Shift) => void;
 }
 
 function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: number }> {
@@ -45,7 +46,7 @@ function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: n
   return result;
 }
 
-export default function TimelineView({ year, month, users, shifts, isAdmin, onConfirm }: Props) {
+export default function TimelineView({ year, month, users, shifts, isAdmin, onConfirm, onShiftClick }: Props) {
   const days = getDaysInMonth(year, month);
   const minWidth = TIME_COL_WIDTH + COL_WIDTH * days.length;
 
@@ -188,54 +189,37 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                     const staffUser = users.find((u) => u.id === s.user_id);
                     const name = staffUser?.name ?? '?';
 
-                    // ブロック幅に応じて表示を段階的に変える
-                    const showFullName = w >= 72;
-                    const showShortName = w >= 40 && !showFullName;
-                    const showTimeRow = w >= 56 && height > 28;
-                    const showConfirm = isAdmin && s.status === 'draft' && onConfirm && height > 44 && w >= 44;
-
                     return (
                       <div
                         key={s.id}
-                        className="absolute overflow-hidden flex flex-col"
+                        className="absolute overflow-hidden flex flex-col cursor-pointer hover:brightness-110 transition-[filter]"
                         style={{
                           top,
-                          height: Math.max(height, 16),
+                          height: Math.max(height, 28),
                           left: l,
                           width: w,
                           backgroundColor: SHIFT_COLORS[s.shift_type] + 'CC',
                           borderLeft: `3px solid ${SHIFT_COLORS[s.shift_type]}`,
                         }}
+                        onClick={() => onShiftClick?.(s)}
                         title={`${name}  ${s.start_time}〜${s.end_time}${s.comment ? `  ${s.comment}` : ''}`}
                       >
-                        {showFullName && (
-                          <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
-                            <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm flex-1 min-w-0">
-                              {name}
-                            </span>
-                            {s.comment && (
-                              <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
-                            )}
-                          </div>
-                        )}
-                        {showShortName && (
-                          <div className="flex items-center justify-between px-0.5 pt-0.5 gap-0.5">
-                            <span className="text-white text-[10px] font-bold leading-none drop-shadow-sm truncate">
-                              {name.slice(0, 2)}
-                            </span>
-                            {s.comment && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-white flex-shrink-0 opacity-90" />
-                            )}
-                          </div>
-                        )}
-                        {showTimeRow && (
-                          <span className="text-white/90 text-[9px] leading-tight truncate px-1">
-                            {s.start_time}〜{s.end_time}
+                        {/* 名前行（フルネーム・省略なし） */}
+                        <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
+                          <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm flex-1 min-w-0">
+                            {name}
                           </span>
-                        )}
-                        {showConfirm && (
+                          {s.comment && (
+                            <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
+                          )}
+                        </div>
+                        {/* 時間行（常時表示） */}
+                        <span className="text-white/90 text-[9px] leading-tight truncate px-1">
+                          {s.start_time}〜{s.end_time}
+                        </span>
+                        {isAdmin && s.status === 'draft' && onConfirm && height > 44 && (
                           <button
-                            onClick={() => onConfirm(s.id)}
+                            onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
                             className="mx-1 mb-0.5 mt-auto text-[9px] bg-white/30 hover:bg-white/50 text-white rounded px-1 py-px"
                           >
                             確定
