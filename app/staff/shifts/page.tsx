@@ -128,7 +128,7 @@ export default function ShiftsPage() {
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
   return (
-    <div className="pb-32">
+    <div className="pb-48 sm:pb-32">
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -217,7 +217,7 @@ export default function ShiftsPage() {
 
       {/* まとめて提出ボタン（固定フッター） */}
       {!isDeadlinePassed && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
+        <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
           <button
             onClick={handleSubmitAll}
             disabled={dirtyCount === 0 || submitting}
