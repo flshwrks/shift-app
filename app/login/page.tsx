@@ -119,6 +119,9 @@ export default function LoginPage() {
               </button>
             ))}
           </div>
+          <p className="text-center text-xs text-slate-400 mt-5">
+            PINが分からない場合は管理者にお尋ねください
+          </p>
         </div>
       </div>
     );

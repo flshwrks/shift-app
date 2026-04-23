@@ -106,6 +106,25 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
 
                 {/* Shift blocks */}
                 <div className="relative" style={{ height: TOTAL_HEIGHT }}>
+                  {/* 人数不足の背景色（8:00〜9:00は1人でOK） */}
+                  {counts.map((count, i) => {
+                    const isEarly = i < 2; // 8:00〜9:00（slot 0, 1）
+                    const needsRed = count === 0;
+                    const needsYellow = count === 1 && !isEarly;
+                    if (!needsRed && !needsYellow) return null;
+                    return (
+                      <div
+                        key={`alert-${i}`}
+                        className="absolute left-0 right-0 pointer-events-none"
+                        style={{
+                          top: (i * 30 / 60) * HOUR_HEIGHT,
+                          height: (30 / 60) * HOUR_HEIGHT,
+                          backgroundColor: needsRed ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                        }}
+                      />
+                    );
+                  })}
+
                   {/* Hour grid */}
                   {HOURS.map((h) => (
                     <div

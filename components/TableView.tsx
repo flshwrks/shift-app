@@ -13,8 +13,7 @@ interface Props {
 }
 
 function getShiftLabel(s: Shift): string {
-  if (s.shift_type === 'custom') return `${s.start_time}〜${s.end_time}`;
-  return s.shift_type;
+  return `${s.shift_type === 'custom' ? '' : s.shift_type + ' '}${s.start_time}〜${s.end_time}`;
 }
 
 export default function TableView({ year, month, users, shifts, isAdmin, onConfirm }: Props) {

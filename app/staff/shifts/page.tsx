@@ -43,14 +43,14 @@ export default function ShiftsPage() {
   useEffect(() => { setDays(getDaysInMonth(year, month)); }, [year, month]);
 
   useEffect(() => {
-    supabase.from('app_settings').select('value').eq('key', 'deadline').single()
+    const key = `deadline_${formatYM(year, month)}`;
+    supabase.from('app_settings').select('value').eq('key', key).single()
       .then(({ data }) => {
-        if (data?.value) {
-          setDeadline(data.value);
-          setIsDeadlinePassed(new Date() > new Date(data.value));
-        }
+        const val = data?.value ?? '';
+        setDeadline(val);
+        setIsDeadlinePassed(val ? new Date() > new Date(val) : false);
       });
-  }, []);
+  }, [year, month]);
 
   const loadShifts = useCallback(async () => {
     if (!user) return;
