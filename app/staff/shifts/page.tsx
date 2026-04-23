@@ -3,11 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import {
-  getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, generateTimeSlots, isWeekend,
+  getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, isWeekend,
 } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
-
-const TIME_SLOTS = generateTimeSlots();
 
 const SHIFT_LIST = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
 
@@ -150,20 +148,66 @@ export default function ShiftsPage() {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
+  const [copying, setCopying] = useState(false);
+  const copyFromPrevMonth = async () => {
+    if (!user || copying) return;
+    setCopying(true);
+    const [prevY, prevM] = month === 0 ? [year - 1, 11] : [year, month - 1];
+    const { data } = await supabase
+      .from('shifts').select('*').eq('user_id', user.id)
+      .gte('date', monthStart(prevY, prevM)).lte('date', monthEnd(prevY, prevM));
+    setCopying(false);
+    if (!data || data.length === 0) { alert('前月のシフトデータがありません'); return; }
+    const currentDays = getDaysInMonth(year, month);
+    const next = { ...shifts };
+    for (const s of data) {
+      const prevDate = new Date(s.date + 'T00:00:00');
+      const weekday = prevDate.getDay();
+      const occurrence = Math.floor((prevDate.getDate() - 1) / 7);
+      let count = 0;
+      for (const d of currentDays) {
+        if (d.getDay() === weekday) {
+          if (count === occurrence) {
+            const key = formatDate(d);
+            next[key] = {
+              shiftType: s.shift_type, startTime: s.start_time, endTime: s.end_time,
+              comment: s.comment ?? '', dirty: true,
+              existingId: next[key]?.existingId, status: next[key]?.status,
+            };
+            break;
+          }
+          count++;
+        }
+      }
+    }
+    setShifts(next);
+  };
+
   return (
     <div className="pb-48 sm:pb-32">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2">
           <button onClick={prevMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">◀</button>
           <h2 className="text-lg font-bold text-slate-800">{year}年{month + 1}月</h2>
           <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">▶</button>
         </div>
-        {deadline && (
-          <div className={`text-xs px-2.5 py-1.5 rounded-lg ${isDeadlinePassed ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
-            締切 {new Date(deadline).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {!isDeadlinePassed && (
+            <button
+              onClick={copyFromPrevMonth}
+              disabled={copying}
+              className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg disabled:opacity-50"
+            >
+              {copying ? '取得中…' : '前月コピー'}
+            </button>
+          )}
+          {deadline && (
+            <div className={`text-xs px-2.5 py-1.5 rounded-lg ${isDeadlinePassed ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
+              締切 {new Date(deadline).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* シフト凡例 */}
@@ -308,15 +352,21 @@ export default function ShiftsPage() {
 
             {editShift.shiftType === 'custom' && (
               <div className="flex items-center gap-2 mb-3 px-1">
-                <select value={editShift.startTime} onChange={e => setEditShift(ev => ({ ...ev, startTime: e.target.value }))}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                  {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <input
+                  type="time"
+                  step="1800"
+                  value={editShift.startTime}
+                  onChange={e => setEditShift(ev => ({ ...ev, startTime: e.target.value }))}
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
                 <span className="text-slate-400">〜</span>
-                <select value={editShift.endTime} onChange={e => setEditShift(ev => ({ ...ev, endTime: e.target.value }))}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-                  {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <input
+                  type="time"
+                  step="1800"
+                  value={editShift.endTime}
+                  onChange={e => setEditShift(ev => ({ ...ev, endTime: e.target.value }))}
+                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
               </div>
             )}
 

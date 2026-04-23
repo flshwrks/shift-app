@@ -68,10 +68,12 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                     {s ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <span
-                          className="inline-block px-2 py-0.5 rounded-md text-white font-bold text-xs"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-white font-bold text-xs"
                           style={{ backgroundColor: SHIFT_COLORS[s.shift_type] }}
+                          title={s.comment || undefined}
                         >
                           {getShiftLabel(s)}
+                          {s.comment && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-90 flex-shrink-0" />}
                         </span>
                         {isAdmin && s.status === 'draft' && onConfirm && (
                           <button

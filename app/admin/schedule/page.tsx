@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { monthStart, monthEnd, generateTimeSlots, formatDate, getDaysInMonth } from '@/lib/shifts';
+import { monthStart, monthEnd, formatDate, getDaysInMonth } from '@/lib/shifts';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
 import type { Shift, User, ShiftType } from '@/lib/types';
@@ -14,8 +14,6 @@ interface ModalState {
   date: string;
   shift?: Shift;
 }
-
-const TIME_SLOTS = generateTimeSlots();
 
 function ShiftModal({
   state,
@@ -133,15 +131,21 @@ function ShiftModal({
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <select value={startTime} onChange={e => setStartTime(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <input
+                type="time"
+                step="1800"
+                value={startTime}
+                onChange={e => setStartTime(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
               <span className="text-slate-400 text-sm">〜</span>
-              <select value={endTime} onChange={e => setEndTime(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
+              <input
+                type="time"
+                step="1800"
+                value={endTime}
+                onChange={e => setEndTime(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
             </div>
           </div>
 
@@ -196,6 +200,8 @@ export default function AdminSchedulePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -246,6 +252,17 @@ export default function AdminSchedulePage() {
   };
 
   const draftCount = shifts.filter(s => s.status === 'draft').length;
+  const submittedUserIds = new Set(shifts.map(s => s.user_id));
+  const unsubmittedUsers = users.filter(u => !submittedUserIds.has(u.id));
+
+  const copyReminder = () => {
+    const names = unsubmittedUsers.map(u => u.name).join('、');
+    const text = `【シフト提出のお願い】\n${year}年${month + 1}月のシフトがまだ提出されていません。\n未提出: ${names}\n締切までにご提出をお願いします。`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
@@ -262,6 +279,17 @@ export default function AdminSchedulePage() {
           <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600">▶</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setReminderOpen(true)}
+            className="relative px-3 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200"
+          >
+            未提出者
+            {unsubmittedUsers.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+                {unsubmittedUsers.length}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => setModal({ userId: users[0]?.id ?? '', date: firstDateOfMonth })}
             className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
@@ -309,6 +337,44 @@ export default function AdminSchedulePage() {
           onClose={() => setModal(null)}
           onSaved={handleModalSaved}
         />
+      )}
+
+      {reminderOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-1">シフト未提出スタッフ</h3>
+            <p className="text-xs text-slate-400 mb-4">{year}年{month + 1}月 — 1件もシフト提出がない人</p>
+            {unsubmittedUsers.length === 0 ? (
+              <p className="text-green-600 text-sm py-4 text-center">全員提出済みです</p>
+            ) : (
+              <>
+                <ul className="mb-4 space-y-1.5">
+                  {unsubmittedUsers.map(u => (
+                    <li key={u.id} className="flex items-center gap-2 text-sm text-slate-700">
+                      <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+                      {u.name}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={copyReminder}
+                  className={`w-full py-2.5 text-sm font-medium rounded-xl transition-colors ${
+                    copied ? 'bg-green-100 text-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {copied ? '✓ コピーしました' : 'リマインダーをクリップボードにコピー'}
+                </button>
+                <p className="text-[11px] text-slate-400 mt-2 text-center">LINE・メール等に貼り付けて送信できます</p>
+              </>
+            )}
+            <button
+              onClick={() => setReminderOpen(false)}
+              className="w-full mt-3 py-2 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
