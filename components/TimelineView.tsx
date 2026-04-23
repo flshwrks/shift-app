@@ -6,10 +6,11 @@ import type { User } from '@/lib/types';
 const HOUR_HEIGHT = 64;
 const START_HOUR = 8;
 const END_HOUR = 22;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 14
+const TOTAL_HOURS = END_HOUR - START_HOUR;
 const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const COL_WIDTH = 112;
 const TIME_COL_WIDTH = 44;
+const COUNT_BAR_HEIGHT = 48;
 
 const HOURS = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
@@ -22,6 +23,28 @@ interface Props {
   onConfirm?: (shiftId: string) => void;
 }
 
+// 重なりを考慮してレーン（列）を割り当てる
+function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: number }> {
+  if (shifts.length === 0) return new Map();
+  const sorted = [...shifts].sort((a, b) =>
+    timeToMinutes(a.start_time) - timeToMinutes(b.start_time)
+  );
+  const laneEnds: number[] = [];
+  const laneOf = new Map<string, number>();
+  for (const s of sorted) {
+    const start = timeToMinutes(s.start_time);
+    const end = timeToMinutes(s.end_time);
+    let lane = laneEnds.findIndex(e => e <= start);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(end); }
+    else laneEnds[lane] = end;
+    laneOf.set(s.id, lane);
+  }
+  const totalLanes = laneEnds.length;
+  const result = new Map<string, { lane: number; totalLanes: number }>();
+  laneOf.forEach((lane, id) => result.set(id, { lane, totalLanes }));
+  return result;
+}
+
 export default function TimelineView({ year, month, users, shifts, isAdmin, onConfirm }: Props) {
   const days = getDaysInMonth(year, month);
 
@@ -31,7 +54,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
     shiftsByDate[s.date].push(s);
   });
 
-  // 30分スロット×28 の人数を返す
   function getSlotCounts(date: string): number[] {
     const dayShifts = shiftsByDate[date] ?? [];
     return Array.from({ length: 28 }, (_, i) => {
@@ -45,29 +67,16 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
     });
   }
 
-  // スロット index が 8:00〜9:00 かどうか（1人でOKな時間帯）
-  const isEarlySlot = (i: number) => i < 2;
-
-  function slotBg(count: number, slotIdx: number): string {
+  function slotBg(count: number, i: number): string | null {
     if (count === 0) return 'rgba(239,68,68,0.28)';
-    if (count === 1 && !isEarlySlot(slotIdx)) return 'rgba(245,158,11,0.22)';
-    return 'transparent';
+    if (count === 1 && i >= 2) return 'rgba(245,158,11,0.22)';
+    return null;
   }
 
-  function heatmapColor(count: number, hourIdx: number): string {
-    const early = hourIdx === 0; // 8:00〜9:00
-    if (count === 0) return '#FCA5A5';   // red-300
-    if (count === 1 && !early) return '#FCD34D'; // amber-300
-    if (count === 1 && early) return '#86EFAC';  // green-300
-    if (count === 2) return '#4ADE80';   // green-400
-    return '#16A34A';                    // green-600 (3人以上)
-  }
-
-  function heatmapText(count: number, hourIdx: number): string {
-    const early = hourIdx === 0;
-    if (count === 0) return 'text-red-700';
-    if (count === 1 && !early) return 'text-amber-800';
-    return 'text-green-800';
+  function barColor(count: number, i: number): string {
+    if (count === 0) return '#EF4444';
+    if (count === 1 && i >= 2) return '#F59E0B';
+    return '#22C55E';
   }
 
   return (
@@ -75,24 +84,19 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
       <div className="overflow-auto">
         <div className="flex" style={{ minWidth: TIME_COL_WIDTH + COL_WIDTH * days.length }}>
 
-          {/* 時刻軸 */}
+          {/* 時刻軸（スクロール時に固定） */}
           <div className="flex-shrink-0 sticky left-0 z-10 bg-white border-r border-slate-200" style={{ width: TIME_COL_WIDTH }}>
-            {/* ヘッダー空白 */}
             <div className="h-10 border-b border-slate-200 bg-slate-50" />
-            {/* 時刻ラベル */}
             <div className="relative bg-white" style={{ height: TOTAL_HEIGHT }}>
               {HOURS.map((h) => (
                 <div key={h} className="absolute left-0 right-0" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }}>
-                  <span className="text-[10px] text-slate-400 pl-1.5 leading-none block -translate-y-2">
-                    {h}:00
-                  </span>
                   <div className="absolute top-0 left-0 right-0 border-t border-slate-200" />
+                  <span className="text-[10px] text-slate-400 pl-1.5 block -translate-y-2 leading-none">{h}:00</span>
                 </div>
               ))}
             </div>
-            {/* ヒートマップ行ラベル */}
-            <div className="border-t-2 border-slate-300 bg-slate-50" style={{ height: TOTAL_HOURS * 20 + 8 }}>
-              <span className="text-[9px] text-slate-400 pl-1.5 pt-1 block">人数</span>
+            <div className="border-t-2 border-slate-300 bg-slate-50" style={{ height: COUNT_BAR_HEIGHT }}>
+              <span className="text-[9px] text-slate-400 pl-1.5 pt-1 block leading-none">人数</span>
             </div>
           </div>
 
@@ -101,31 +105,25 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
             const dateStr = formatDate(day);
             const dayShifts = shiftsByDate[dateStr] ?? [];
             const counts = getSlotCounts(dateStr);
+            const laneMap = assignLanes(dayShifts);
             const dow = day.getDay();
             const isSun = dow === 0;
             const isSat = dow === 6;
 
-            // 1時間ごとの最低人数（ヒートマップ用）
-            const hourCounts = Array.from({ length: TOTAL_HOURS }, (_, hi) => {
-              const c0 = counts[hi * 2] ?? 0;
-              const c1 = counts[hi * 2 + 1] ?? 0;
-              return Math.min(c0, c1);
-            });
-
             return (
               <div
                 key={dateStr}
-                className={`flex-shrink-0 border-r border-slate-100 ${isSun ? 'bg-red-50/40' : isSat ? 'bg-blue-50/30' : ''}`}
+                className={`flex-shrink-0 border-r border-slate-100 ${isSun ? 'bg-red-50/30' : isSat ? 'bg-blue-50/20' : ''}`}
                 style={{ width: COL_WIDTH }}
               >
                 {/* 日付ヘッダー */}
-                <div className={`h-10 border-b border-slate-200 flex flex-col items-center justify-center ${
+                <div className={`h-10 border-b border-slate-200 flex flex-col items-center justify-center gap-px ${
                   isSun ? 'bg-red-50' : isSat ? 'bg-blue-50' : 'bg-slate-50'
                 }`}>
-                  <span className={`text-[11px] font-bold ${isSun ? 'text-red-500' : isSat ? 'text-blue-500' : 'text-slate-700'}`}>
+                  <span className={`text-[11px] font-bold leading-none ${isSun ? 'text-red-500' : isSat ? 'text-blue-500' : 'text-slate-700'}`}>
                     {day.getDate()}
                   </span>
-                  <span className={`text-[9px] ${isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-slate-400'}`}>
+                  <span className={`text-[9px] leading-none ${isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-slate-400'}`}>
                     {'日月火水木金土'[dow]}
                   </span>
                 </div>
@@ -136,11 +134,9 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                   {/* 人数不足の背景 */}
                   {counts.map((count, i) => {
                     const bg = slotBg(count, i);
-                    if (!bg || bg === 'transparent') return null;
+                    if (!bg) return null;
                     return (
-                      <div
-                        key={`bg-${i}`}
-                        className="absolute left-0 right-0 pointer-events-none"
+                      <div key={`bg-${i}`} className="absolute left-0 right-0 pointer-events-none"
                         style={{
                           top: (i * 30 / 60) * HOUR_HEIGHT,
                           height: (30 / 60) * HOUR_HEIGHT,
@@ -150,82 +146,75 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                     );
                   })}
 
-                  {/* 時間グリッド */}
+                  {/* グリッド線 */}
                   {HOURS.map((h) => (
                     <div key={h} className="absolute left-0 right-0 border-t border-slate-200"
                       style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />
                   ))}
                   {HOURS.slice(0, -1).map((h) => (
-                    <div key={`h${h}`} className="absolute left-0 right-0 border-t border-dashed border-slate-100"
+                    <div key={`hh${h}`} className="absolute left-0 right-0 border-t border-dashed border-slate-100"
                       style={{ top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
                   ))}
 
-                  {/* シフトブロック */}
-                  {dayShifts.map((s, si) => {
+                  {/* シフトブロック（レーン割り当て済み・隙間なし） */}
+                  {dayShifts.map((s) => {
+                    const { lane, totalLanes } = laneMap.get(s.id) ?? { lane: 0, totalLanes: 1 };
                     const startMin = timeToMinutes(s.start_time);
                     const endMin = timeToMinutes(s.end_time);
                     const top = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
                     const height = ((endMin - startMin) / 60) * HOUR_HEIGHT;
+                    const w = COL_WIDTH / totalLanes;
+                    const l = (lane / totalLanes) * COL_WIDTH;
                     const staffUser = users.find((u) => u.id === s.user_id);
-                    const total = dayShifts.length;
-                    const w = 100 / total;
-                    const l = (si / total) * 100;
-                    const isDraft = s.status === 'draft';
 
                     return (
                       <div
                         key={s.id}
                         className="absolute overflow-hidden flex flex-col"
                         style={{
-                          top: top + 1,
-                          height: Math.max(height - 2, 14),
-                          left: `calc(${l}% + 1px)`,
-                          width: `calc(${w}% - 2px)`,
+                          top,
+                          height: Math.max(height, 16),
+                          left: l,
+                          width: w,
                           backgroundColor: SHIFT_COLORS[s.shift_type] + 'CC',
                           borderLeft: `3px solid ${SHIFT_COLORS[s.shift_type]}`,
-                          borderRadius: 4,
                         }}
                       >
-                        <div className="flex flex-col px-1 pt-0.5 overflow-hidden">
-                          <span className="text-white text-[10px] font-bold leading-tight truncate drop-shadow-sm">
-                            {staffUser?.name ?? '?'}
+                        <span className="text-white text-[10px] font-bold leading-tight truncate px-1 pt-0.5 drop-shadow-sm">
+                          {staffUser?.name ?? '?'}
+                        </span>
+                        {height > 28 && (
+                          <span className="text-white/90 text-[9px] leading-tight truncate px-1">
+                            {s.start_time}〜{s.end_time}
                           </span>
-                          {height > 28 && (
-                            <span className="text-white/90 text-[9px] leading-tight truncate">
-                              {s.start_time}〜{s.end_time}
-                            </span>
-                          )}
-                        </div>
-                        {isDraft && isAdmin && onConfirm && height > 36 && (
+                        )}
+                        {isAdmin && s.status === 'draft' && onConfirm && height > 40 && (
                           <button
                             onClick={() => onConfirm(s.id)}
-                            className="mx-0.5 mb-0.5 mt-auto text-[9px] bg-white/30 hover:bg-white/50 text-white rounded px-1 py-px leading-tight text-center"
+                            className="mx-1 mb-0.5 mt-auto text-[9px] bg-white/30 hover:bg-white/50 text-white rounded px-1 py-px"
                           >
                             確定
                           </button>
-                        )}
-                        {isDraft && (
-                          <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/60" title="未確定" />
                         )}
                       </div>
                     );
                   })}
                 </div>
 
-                {/* ヒートマップ（時間ごとの人数） */}
-                <div className="border-t-2 border-slate-300 bg-white" style={{ height: TOTAL_HOURS * 20 + 8 }}>
-                  <div className="flex flex-col gap-px px-0.5 py-1">
-                    {hourCounts.map((count, hi) => (
-                      <div
-                        key={hi}
-                        className={`flex items-center justify-center rounded-sm text-[9px] font-bold ${heatmapText(count, hi)}`}
-                        style={{ height: 16, backgroundColor: heatmapColor(count, hi) }}
-                        title={`${START_HOUR + hi}:00〜${START_HOUR + hi + 1}:00 — ${count}人`}
-                      >
-                        {count}
-                      </div>
-                    ))}
-                  </div>
+                {/* 人数バー */}
+                <div className="border-t-2 border-slate-300 bg-slate-50 flex items-end px-px pb-px gap-px"
+                  style={{ height: COUNT_BAR_HEIGHT }}>
+                  {counts.map((count, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-[1px] min-w-0"
+                      style={{
+                        backgroundColor: barColor(count, i),
+                        height: count === 0 ? 4 : count === 1 ? 12 : Math.min(6 + count * 6, COUNT_BAR_HEIGHT - 4),
+                      }}
+                      title={`${8 + Math.floor(i / 2)}:${i % 2 === 0 ? '00' : '30'} — ${count}人`}
+                    />
+                  ))}
                 </div>
               </div>
             );
@@ -236,10 +225,9 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
       {/* 凡例 */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-t border-slate-200 bg-slate-50 text-xs text-slate-500">
         <span className="font-medium text-slate-600">人数:</span>
-        <span className="flex items-center gap-1"><span className="w-4 h-4 rounded inline-flex items-center justify-center text-[9px] font-bold text-green-800" style={{ backgroundColor: '#4ADE80' }}>2</span>2人以上 (正常)</span>
-        <span className="flex items-center gap-1"><span className="w-4 h-4 rounded inline-flex items-center justify-center text-[9px] font-bold text-amber-800" style={{ backgroundColor: '#FCD34D' }}>1</span>1人 (注意)</span>
-        <span className="flex items-center gap-1"><span className="w-4 h-4 rounded inline-flex items-center justify-center text-[9px] font-bold text-red-700" style={{ backgroundColor: '#FCA5A5' }}>0</span>0人 (要対応)</span>
-        <span className="flex items-center gap-1 text-slate-400"><span className="w-1.5 h-1.5 rounded-full bg-white/60 border border-slate-300 inline-block mr-0.5" />未確定</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block bg-green-500" /> 2人以上</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block bg-amber-400" /> 1人 (注意)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block bg-red-500" /> 0人 (要対応)</span>
       </div>
     </div>
   );
