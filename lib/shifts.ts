@@ -39,6 +39,18 @@ export function formatYM(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
+/** その月の最終日を YYYY-MM-DD で返す（月によって28〜31日が変わる） */
+export function monthEnd(year: number, month: number): string {
+  // 翌月0日 = その月の末日
+  const d = new Date(year, month + 1, 0);
+  return formatDate(d);
+}
+
+/** その月の初日を YYYY-MM-DD で返す */
+export function monthStart(year: number, month: number): string {
+  return `${formatYM(year, month)}-01`;
+}
+
 export function getDayLabel(date: Date): string {
   const day = date.getDate();
   const dow = DAY_NAMES_JA[date.getDay()];

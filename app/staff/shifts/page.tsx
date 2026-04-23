@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import {
-  getDaysInMonth, formatDate, formatYM, getDayLabel, generateTimeSlots, isWeekend,
+  getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, generateTimeSlots, isWeekend,
 } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
 
@@ -59,8 +59,8 @@ export default function ShiftsPage() {
       .from('shifts')
       .select('*')
       .eq('user_id', user.id)
-      .gte('date', `${ym}-01`)
-      .lte('date', `${ym}-31`);
+      .gte('date', monthStart(year, month))
+      .lte('date', monthEnd(year, month));
     if (error) { console.error('loadShifts error:', error); return; }
     const next: Record<string, DayShift> = {};
     getDaysInMonth(year, month).forEach(d => { next[formatDate(d)] = defaultDay(); });

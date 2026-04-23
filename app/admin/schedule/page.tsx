@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { formatYM } from '@/lib/shifts';
+import { monthStart, monthEnd } from '@/lib/shifts';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
 import type { Shift, User } from '@/lib/types';
@@ -19,12 +19,11 @@ export default function AdminSchedulePage() {
 
   useEffect(() => {
     let alive = true;
-    const ym = formatYM(year, month);
 
     async function fetchData() {
       const [{ data: usersData }, { data: shiftsData }] = await Promise.all([
         supabase.from('users').select('id, name, role, created_at').order('name'),
-        supabase.from('shifts').select('*').gte('date', `${ym}-01`).lte('date', `${ym}-31`).order('date'),
+        supabase.from('shifts').select('*').gte('date', monthStart(year, month)).lte('date', monthEnd(year, month)).order('date'),
       ]);
       if (!alive) return;
       setUsers(usersData ?? []);
