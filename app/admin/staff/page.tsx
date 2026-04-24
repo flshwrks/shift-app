@@ -42,7 +42,7 @@ export default function AdminStaffPage() {
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
 
   const loadUsers = async () => {
-    const { data } = await supabase.from('users').select('id, name, role, pin, created_at').order('name');
+    const { data } = await supabase.from('users').select('id, name, role, pin, display_order, created_at').order('display_order', { ascending: true, nullsFirst: false });
     setUsers(data ?? []);
   };
 
@@ -63,7 +63,8 @@ export default function AdminStaffPage() {
     if (addPin !== addPinConfirm) return setAddError('PINが一致しません');
     setAddSaving(true);
     const pin_hash = await hashPin(addPin);
-    const { error } = await supabase.from('users').insert({ name: addName.trim(), pin_hash, pin: addPin, role: addRole });
+    const maxOrder = users.reduce((m, u) => Math.max(m, u.display_order ?? 0), 0);
+    const { error } = await supabase.from('users').insert({ name: addName.trim(), pin_hash, pin: addPin, role: addRole, display_order: maxOrder + 1 });
     setAddSaving(false);
     if (error) { setAddError(error.message.includes('unique') ? 'この名前は既に登録されています' : error.message); return; }
     setAddName(''); setAddPin(''); setAddPinConfirm(''); setAddRole('staff');
@@ -100,6 +101,24 @@ export default function AdminStaffPage() {
   const handleDelete = async (u: User) => {
     await supabase.from('users').delete().eq('id', u.id);
     setDeleteTarget(null);
+  };
+
+  // 並び替え
+  const moveUser = async (idx: number, dir: 'up' | 'down') => {
+    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= users.length) return;
+    const a = users[idx];
+    const b = users[targetIdx];
+    const orderA = a.display_order ?? idx + 1;
+    const orderB = b.display_order ?? targetIdx + 1;
+    const next = [...users];
+    next[idx] = { ...a, display_order: orderB };
+    next[targetIdx] = { ...b, display_order: orderA };
+    setUsers(next);
+    await Promise.all([
+      supabase.from('users').update({ display_order: orderB }).eq('id', a.id),
+      supabase.from('users').update({ display_order: orderA }).eq('id', b.id),
+    ]);
   };
 
   return (
@@ -165,6 +184,7 @@ export default function AdminStaffPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-2 py-3 w-10" />
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">名前</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">権限</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">PIN</th>
@@ -173,8 +193,22 @@ export default function AdminStaffPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map(u => (
+              {users.map((u, ui) => (
                 <tr key={u.id} className="hover:bg-slate-50">
+                  <td className="px-2 py-3">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <button
+                        onClick={() => moveUser(ui, 'up')}
+                        disabled={ui === 0}
+                        className="text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed leading-none text-xs px-1"
+                      >▲</button>
+                      <button
+                        onClick={() => moveUser(ui, 'down')}
+                        disabled={ui === users.length - 1}
+                        className="text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed leading-none text-xs px-1"
+                      >▼</button>
+                    </div>
+                  </td>
                   <td className="px-5 py-3 font-medium text-slate-800 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span className={`w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0 ${u.role === 'admin' ? 'bg-orange-500' : 'bg-blue-500'}`}>

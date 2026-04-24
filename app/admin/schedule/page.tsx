@@ -208,7 +208,7 @@ export default function AdminSchedulePage() {
 
   const fetchData = useCallback(async () => {
     const [{ data: usersData }, { data: shiftsData }] = await Promise.all([
-      supabase.from('users').select('id, name, role, created_at').order('created_at'),
+      supabase.from('users').select('id, name, role, created_at').order('display_order', { ascending: true, nullsFirst: false }),
       supabase.from('shifts').select('*').gte('date', monthStart(year, month)).lte('date', monthEnd(year, month)).order('date'),
     ]);
     setUsers(usersData ?? []);

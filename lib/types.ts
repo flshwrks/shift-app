@@ -6,6 +6,7 @@ export interface User {
   role: UserRole;
   created_at: string;
   pin?: string;
+  display_order?: number;
 }
 
 export type ShiftType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'custom';
