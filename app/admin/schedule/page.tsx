@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { monthStart, monthEnd, formatDate, getDaysInMonth } from '@/lib/shifts';
+import { useCallback } from 'react';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
 import ShiftDetailModal from '@/components/ShiftDetailModal';
@@ -205,19 +206,16 @@ export default function AdminSchedulePage() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const fetchData = useCallback(async () => {
+    const [{ data: usersData }, { data: shiftsData }] = await Promise.all([
+      supabase.from('users').select('id, name, role, created_at').order('created_at'),
+      supabase.from('shifts').select('*').gte('date', monthStart(year, month)).lte('date', monthEnd(year, month)).order('date'),
+    ]);
+    setUsers(usersData ?? []);
+    setShifts(shiftsData ?? []);
+  }, [year, month]);
+
   useEffect(() => {
-    let alive = true;
-
-    async function fetchData() {
-      const [{ data: usersData }, { data: shiftsData }] = await Promise.all([
-        supabase.from('users').select('id, name, role, created_at').order('name'),
-        supabase.from('shifts').select('*').gte('date', monthStart(year, month)).lte('date', monthEnd(year, month)).order('date'),
-      ]);
-      if (!alive) return;
-      setUsers(usersData ?? []);
-      setShifts(shiftsData ?? []);
-    }
-
     fetchData();
 
     const channel = supabase
@@ -225,11 +223,8 @@ export default function AdminSchedulePage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, fetchData)
       .subscribe();
 
-    return () => {
-      alive = false;
-      supabase.removeChannel(channel);
-    };
-  }, [year, month]);
+    return () => { supabase.removeChannel(channel); };
+  }, [year, month, fetchData]);
 
   const handleConfirm = async (shiftId: string) => {
     await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shiftId);
@@ -256,6 +251,7 @@ export default function AdminSchedulePage() {
   const handleModalSaved = () => {
     setModal(null);
     setDetailShift(null);
+    fetchData();
   };
 
   const draftCount = shifts.filter(s => s.status === 'draft').length;
