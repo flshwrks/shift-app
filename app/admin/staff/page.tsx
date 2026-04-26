@@ -46,13 +46,10 @@ export default function AdminStaffPage() {
     setUsers(data ?? []);
   };
 
-  useEffect(() => { loadUsers(); }, []);
-
   useEffect(() => {
-    const channel = supabase.channel('staff-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, loadUsers)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    console.log('[AdminStaff] mounted');
+    loadUsers();
+    return () => console.log('[AdminStaff] unmounted');
   }, []);
 
   // 追加
@@ -69,6 +66,7 @@ export default function AdminStaffPage() {
     if (error) { setAddError(error.message.includes('unique') ? 'この名前は既に登録されています' : error.message); return; }
     setAddName(''); setAddPin(''); setAddPinConfirm(''); setAddRole('staff');
     setShowAddForm(false);
+    loadUsers();
   };
 
   // 編集モーダルを開く
@@ -95,30 +93,32 @@ export default function AdminStaffPage() {
     setEditSaving(false);
     if (error) { setEditError(error.message); return; }
     setEditTarget(null);
+    loadUsers();
   };
 
   // 削除
   const handleDelete = async (u: User) => {
     await supabase.from('users').delete().eq('id', u.id);
     setDeleteTarget(null);
+    loadUsers();
   };
 
   // 並び替え
   const moveUser = async (idx: number, dir: 'up' | 'down') => {
+    console.log('[moveUser] called idx=%d dir=%s users.length=%d', idx, dir, users.length, users.map(u => u.name));
     const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= users.length) return;
-    const a = users[idx];
-    const b = users[targetIdx];
-    const orderA = a.display_order ?? idx + 1;
-    const orderB = b.display_order ?? targetIdx + 1;
+    if (targetIdx < 0 || targetIdx >= users.length) {
+      console.log('[moveUser] early return: targetIdx=%d out of range', targetIdx);
+      return;
+    }
     const next = [...users];
-    next[idx] = { ...a, display_order: orderB };
-    next[targetIdx] = { ...b, display_order: orderA };
-    setUsers(next);
-    await Promise.all([
-      supabase.from('users').update({ display_order: orderB }).eq('id', a.id),
-      supabase.from('users').update({ display_order: orderA }).eq('id', b.id),
-    ]);
+    [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+    const withOrder = next.map((u, i) => ({ ...u, display_order: i + 1 }));
+    console.log('[moveUser] calling setUsers:', withOrder.map(u => u.name));
+    setUsers(withOrder);
+    Promise.all(withOrder.map(u =>
+      supabase.from('users').update({ display_order: u.display_order }).eq('id', u.id)
+    )).then(() => console.log('[moveUser] DB updates done'));
   };
 
   return (
@@ -193,19 +193,20 @@ export default function AdminStaffPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {console.log('[render] users:', users.map(u => u.name))}
               {users.map((u, ui) => (
                 <tr key={u.id} className="hover:bg-slate-50">
-                  <td className="px-2 py-3">
-                    <div className="flex flex-col items-center gap-0.5">
+                  <td className="px-2 py-2">
+                    <div className="flex flex-col items-center gap-1">
                       <button
                         onClick={() => moveUser(ui, 'up')}
                         disabled={ui === 0}
-                        className="text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed leading-none text-xs px-1"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed text-sm"
                       >▲</button>
                       <button
                         onClick={() => moveUser(ui, 'down')}
                         disabled={ui === users.length - 1}
-                        className="text-slate-300 hover:text-slate-600 disabled:opacity-20 disabled:cursor-not-allowed leading-none text-xs px-1"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed text-sm"
                       >▼</button>
                     </div>
                   </td>
