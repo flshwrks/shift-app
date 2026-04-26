@@ -286,44 +286,34 @@ export default function ShiftsPage() {
         </div>
       </div>
 
-      {/* ロック画面 */}
       {isLocked && (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="text-6xl mb-5">🔒</div>
-          <h3 className="text-xl font-bold text-slate-700 mb-2">現在提出期間外です</h3>
-          {periodSet && (
-            <p className="text-sm text-slate-500 mb-1">
-              提出期間: {openDate ? fmtPeriodDate(openDate) : '?'} 〜 {closeDate ? fmtPeriodDate(closeDate) : '?'}
-            </p>
-          )}
-          <p className="text-xs text-slate-400 mt-2">この期間中のみシフトを提出できます</p>
+        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
+          提出期間外のため申請できません
         </div>
       )}
 
       {/* シフト凡例 */}
-      {!isLocked && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
-          <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wide">シフト種別</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {SHIFT_LIST.map(type => {
-              const p = SHIFT_PRESETS[type];
-              return (
-                <div key={type} className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
-                  <span className="text-[11px] text-slate-500">{p.start}〜{p.end}</span>
-                </div>
-              );
-            })}
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-400 text-white text-[10px] font-bold flex-shrink-0">自</span>
-              <span className="text-[11px] text-slate-500">カスタム</span>
-            </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
+        <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wide">シフト種別</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {SHIFT_LIST.map(type => {
+            const p = SHIFT_PRESETS[type];
+            return (
+              <div key={type} className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
+                <span className="text-[11px] text-slate-500">{p.start}〜{p.end}</span>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-400 text-white text-[10px] font-bold flex-shrink-0">自</span>
+            <span className="text-[11px] text-slate-500">カスタム</span>
           </div>
         </div>
-      )}
+      </div>
 
       {/* 日付リスト */}
-      {!isLocked && <div className="space-y-1.5">
+      <div className="space-y-1.5">
         {days.map(day => {
           const key = formatDate(day);
           const s = shifts[key] ?? defaultDay();
@@ -354,19 +344,21 @@ export default function ShiftsPage() {
                 {s.comment && <p className="text-xs text-slate-400 mt-0.5 truncate">{s.comment}</p>}
               </div>
 
-              {/* 入力ボタン */}
-              <button
-                onClick={() => openPopup(key, day)}
-                className="flex-shrink-0 w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
-              >
-                入力
-              </button>
+              {/* 入力ボタン（期間外は非表示） */}
+              {!isLocked && (
+                <button
+                  onClick={() => openPopup(key, day)}
+                  className="flex-shrink-0 w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
+                >
+                  入力
+                </button>
+              )}
             </div>
           );
         })}
-      </div>}
+      </div>
 
-      {/* まとめて提出ボタン（固定フッター） */}
+      {/* まとめて提出ボタン（固定フッター、期間外は非表示） */}
       {!isLocked && (
         <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
           <button
