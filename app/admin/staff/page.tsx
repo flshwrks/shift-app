@@ -46,11 +46,7 @@ export default function AdminStaffPage() {
     setUsers(data ?? []);
   };
 
-  useEffect(() => {
-    console.log('[AdminStaff] mounted');
-    loadUsers();
-    return () => console.log('[AdminStaff] unmounted');
-  }, []);
+  useEffect(() => { loadUsers(); }, []);
 
   // 追加
   const handleAdd = async () => {
@@ -104,21 +100,16 @@ export default function AdminStaffPage() {
   };
 
   // 並び替え
-  const moveUser = async (idx: number, dir: 'up' | 'down') => {
-    console.log('[moveUser] called idx=%d dir=%s users.length=%d', idx, dir, users.length, users.map(u => u.name));
+  const moveUser = (idx: number, dir: 'up' | 'down') => {
     const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= users.length) {
-      console.log('[moveUser] early return: targetIdx=%d out of range', targetIdx);
-      return;
-    }
+    if (targetIdx < 0 || targetIdx >= users.length) return;
     const next = [...users];
     [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
     const withOrder = next.map((u, i) => ({ ...u, display_order: i + 1 }));
-    console.log('[moveUser] calling setUsers:', withOrder.map(u => u.name));
     setUsers(withOrder);
     Promise.all(withOrder.map(u =>
       supabase.from('users').update({ display_order: u.display_order }).eq('id', u.id)
-    )).then(() => console.log('[moveUser] DB updates done'));
+    ));
   };
 
   return (
@@ -193,7 +184,6 @@ export default function AdminStaffPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {console.log('[render] users:', users.map(u => u.name))}
               {users.map((u, ui) => (
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-2 py-2">
