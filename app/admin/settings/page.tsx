@@ -6,7 +6,7 @@ import { formatYM } from '@/lib/shifts';
 function getUpcomingMonths(count = 6): { year: number; month: number; label: string }[] {
   const now = new Date();
   return Array.from({ length: count }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const d = new Date(now.getFullYear(), now.getMonth() + 1 + i, 1);
     return { year: d.getFullYear(), month: d.getMonth(), label: `${d.getFullYear()}年${d.getMonth() + 1}月` };
   });
 }
