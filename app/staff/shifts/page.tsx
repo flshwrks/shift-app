@@ -30,8 +30,8 @@ export default function ShiftsPage() {
   const [month, setMonth] = useState(now.getMonth());
   const [days, setDays] = useState<Date[]>([]);
   const [shifts, setShifts] = useState<Record<string, DayShift>>({});
-  const [deadline, setDeadline] = useState('');
-  const [isDeadlinePassed, setIsDeadlinePassed] = useState(false);
+  const [openDate, setOpenDate] = useState('');
+  const [closeDate, setCloseDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
 
@@ -41,12 +41,14 @@ export default function ShiftsPage() {
   useEffect(() => { setDays(getDaysInMonth(year, month)); }, [year, month]);
 
   useEffect(() => {
-    const key = `deadline_${formatYM(year, month)}`;
-    supabase.from('app_settings').select('value').eq('key', key).single()
+    const ym = formatYM(year, month);
+    supabase.from('app_settings').select('key, value')
+      .in('key', [`period_open_${ym}`, `period_close_${ym}`])
       .then(({ data }) => {
-        const val = data?.value ?? '';
-        setDeadline(val);
-        setIsDeadlinePassed(val ? new Date() > new Date(val) : false);
+        const map: Record<string, string> = {};
+        (data ?? []).forEach(({ key, value }: { key: string; value: string }) => { map[key] = value ?? ''; });
+        setOpenDate(map[`period_open_${ym}`] ?? '');
+        setCloseDate(map[`period_close_${ym}`] ?? '');
       });
   }, [year, month]);
 
@@ -137,10 +139,18 @@ export default function ShiftsPage() {
     }
   };
 
+  const today = new Date().toISOString().split('T')[0];
+  const periodSet = !!(openDate || closeDate);
+  const inPeriod = (!openDate || today >= openDate) && (!closeDate || today <= closeDate);
+  const isLocked = periodSet && !inPeriod;
+
+  const fmtPeriodDate = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
+
   const dirtyCount = Object.values(shifts).filter(s => s.dirty).length;
 
   const handleSubmitAll = async () => {
-    if (!user || isDeadlinePassed) return;
+    if (!user || isLocked) return;
     setSubmitting(true);
 
     const entries = Object.entries(shifts).filter(([, s]) => s.dirty);
@@ -230,7 +240,7 @@ export default function ShiftsPage() {
           <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">▶</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {!isDeadlinePassed && (
+          {!isLocked && (
             <button
               onClick={copyFromPrevMonth}
               disabled={copying}
@@ -239,42 +249,52 @@ export default function ShiftsPage() {
               {copying ? '取得中…' : '前月コピー'}
             </button>
           )}
-          {deadline && (
-            <div className={`text-xs px-2.5 py-1.5 rounded-lg ${isDeadlinePassed ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
-              締切 {new Date(deadline).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {periodSet && (
+            <div className={`text-xs px-2.5 py-1.5 rounded-lg ${isLocked ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
+              提出期間 {openDate ? fmtPeriodDate(openDate) : '?'} 〜 {closeDate ? fmtPeriodDate(closeDate) : '?'}
             </div>
           )}
         </div>
       </div>
 
-      {/* シフト凡例 */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
-        <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wide">シフト種別</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {SHIFT_LIST.map(type => {
-            const p = SHIFT_PRESETS[type];
-            return (
-              <div key={type} className="flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
-                <span className="text-[11px] text-slate-500">{p.start}〜{p.end}</span>
-              </div>
-            );
-          })}
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-400 text-white text-[10px] font-bold flex-shrink-0">自</span>
-            <span className="text-[11px] text-slate-500">カスタム</span>
-          </div>
+      {/* ロック画面 */}
+      {isLocked && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="text-6xl mb-5">🔒</div>
+          <h3 className="text-xl font-bold text-slate-700 mb-2">現在提出期間外です</h3>
+          {periodSet && (
+            <p className="text-sm text-slate-500 mb-1">
+              提出期間: {openDate ? fmtPeriodDate(openDate) : '?'} 〜 {closeDate ? fmtPeriodDate(closeDate) : '?'}
+            </p>
+          )}
+          <p className="text-xs text-slate-400 mt-2">この期間中のみシフトを提出できます</p>
         </div>
-      </div>
+      )}
 
-      {isDeadlinePassed && (
-        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
-          締切を過ぎているため変更できません
+      {/* シフト凡例 */}
+      {!isLocked && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
+          <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wide">シフト種別</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {SHIFT_LIST.map(type => {
+              const p = SHIFT_PRESETS[type];
+              return (
+                <div key={type} className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
+                  <span className="text-[11px] text-slate-500">{p.start}〜{p.end}</span>
+                </div>
+              );
+            })}
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-400 text-white text-[10px] font-bold flex-shrink-0">自</span>
+              <span className="text-[11px] text-slate-500">カスタム</span>
+            </div>
+          </div>
         </div>
       )}
 
       {/* 日付リスト */}
-      <div className="space-y-1.5">
+      {!isLocked && <div className="space-y-1.5">
         {days.map(day => {
           const key = formatDate(day);
           const s = shifts[key] ?? defaultDay();
@@ -306,21 +326,19 @@ export default function ShiftsPage() {
               </div>
 
               {/* 入力ボタン */}
-              {!isDeadlinePassed && (
-                <button
-                  onClick={() => openPopup(key, day)}
-                  className="flex-shrink-0 w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
-                >
-                  入力
-                </button>
-              )}
+              <button
+                onClick={() => openPopup(key, day)}
+                className="flex-shrink-0 w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
+              >
+                入力
+              </button>
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* まとめて提出ボタン（固定フッター） */}
-      {!isDeadlinePassed && (
+      {!isLocked && (
         <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
           <button
             onClick={handleSubmitAll}

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { formatYM } from '@/lib/shifts';
 
-function getUpcomingMonths(count = 3): { year: number; month: number; label: string }[] {
+function getUpcomingMonths(count = 6): { year: number; month: number; label: string }[] {
   const now = new Date();
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -12,24 +12,25 @@ function getUpcomingMonths(count = 3): { year: number; month: number; label: str
 }
 
 export default function AdminSettingsPage() {
-  const months = getUpcomingMonths(4);
-  const [deadlines, setDeadlines] = useState<Record<string, string>>({});
-  const [savedDeadlines, setSavedDeadlines] = useState<Record<string, boolean>>({});
+  const months = getUpcomingMonths(6);
+  const [periods, setPeriods] = useState<Record<string, string>>({});
+  const [savedPeriods, setSavedPeriods] = useState<Record<string, boolean>>({});
   const [orgName, setOrgName] = useState('');
   const [orgSaved, setOrgSaved] = useState(false);
 
   useEffect(() => {
-    // 組織名
     supabase.from('app_settings').select('value').eq('key', 'org_name').single()
       .then(({ data }) => { if (data?.value) setOrgName(data.value); });
 
-    // 月別締切
-    const keys = months.map(m => `deadline_${formatYM(m.year, m.month)}`);
+    const keys = months.flatMap(m => [
+      `period_open_${formatYM(m.year, m.month)}`,
+      `period_close_${formatYM(m.year, m.month)}`,
+    ]);
     supabase.from('app_settings').select('key, value').in('key', keys)
       .then(({ data }) => {
         const map: Record<string, string> = {};
         (data ?? []).forEach(({ key, value }: { key: string; value: string }) => { map[key] = value; });
-        setDeadlines(map);
+        setPeriods(map);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -40,21 +41,32 @@ export default function AdminSettingsPage() {
     setTimeout(() => setOrgSaved(false), 2000);
   };
 
-  const saveDeadline = async (year: number, month: number) => {
-    const key = `deadline_${formatYM(year, month)}`;
-    await supabase.from('app_settings').upsert({ key, value: deadlines[key] ?? '' });
-    setSavedDeadlines(prev => ({ ...prev, [key]: true }));
-    setTimeout(() => setSavedDeadlines(prev => ({ ...prev, [key]: false })), 2000);
+  const savePeriod = async (year: number, month: number) => {
+    const ym = formatYM(year, month);
+    const openKey = `period_open_${ym}`;
+    const closeKey = `period_close_${ym}`;
+    const saveKey = `${ym}`;
+    await Promise.all([
+      supabase.from('app_settings').upsert({ key: openKey, value: periods[openKey] ?? '' }),
+      supabase.from('app_settings').upsert({ key: closeKey, value: periods[closeKey] ?? '' }),
+    ]);
+    setSavedPeriods(prev => ({ ...prev, [saveKey]: true }));
+    setTimeout(() => setSavedPeriods(prev => ({ ...prev, [saveKey]: false })), 2000);
   };
 
-  const clearDeadline = async (year: number, month: number) => {
-    const key = `deadline_${formatYM(year, month)}`;
-    await supabase.from('app_settings').upsert({ key, value: '' });
-    setDeadlines(prev => ({ ...prev, [key]: '' }));
+  const clearPeriod = async (year: number, month: number) => {
+    const ym = formatYM(year, month);
+    const openKey = `period_open_${ym}`;
+    const closeKey = `period_close_${ym}`;
+    await Promise.all([
+      supabase.from('app_settings').upsert({ key: openKey, value: '' }),
+      supabase.from('app_settings').upsert({ key: closeKey, value: '' }),
+    ]);
+    setPeriods(prev => ({ ...prev, [openKey]: '', [closeKey]: '' }));
   };
 
   return (
-    <div className="space-y-6 max-w-md">
+    <div className="space-y-6 max-w-lg">
       <h2 className="text-xl font-bold text-slate-800">設定</h2>
 
       {/* 組織名 */}
@@ -80,40 +92,55 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* 月別締切 */}
+      {/* 提出期間 */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <h3 className="font-semibold text-slate-700 mb-1">シフト申請 締切日</h3>
-        <p className="text-xs text-slate-400 mb-4">月ごとに設定できます。設定日時以降はスタッフが変更できなくなります。</p>
-        <div className="space-y-4">
+        <h3 className="font-semibold text-slate-700 mb-1">シフト提出期間</h3>
+        <p className="text-xs text-slate-400 mb-4">月ごとに提出可能な期間を設定します。期間外はスタッフが提出できなくなります。未設定の月はいつでも提出可能です。</p>
+        <div className="space-y-5">
           {months.map(({ year, month, label }) => {
-            const key = `deadline_${formatYM(year, month)}`;
-            const val = deadlines[key] ?? '';
-            const saved = savedDeadlines[key];
+            const ym = formatYM(year, month);
+            const openKey = `period_open_${ym}`;
+            const closeKey = `period_close_${ym}`;
+            const openVal = periods[openKey] ?? '';
+            const closeVal = periods[closeKey] ?? '';
+            const saved = savedPeriods[ym];
+            const hasPeriod = openVal || closeVal;
             return (
-              <div key={key}>
-                <p className="text-sm font-medium text-slate-600 mb-1.5">{label}</p>
-                <div className="flex gap-2 items-center">
+              <div key={ym}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm font-medium text-slate-600">{label}</p>
+                  {hasPeriod && (
+                    <button onClick={() => clearPeriod(year, month)} className="text-xs text-red-400 hover:text-red-600">
+                      解除
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
                   <input
-                    type="datetime-local"
-                    value={val}
-                    onChange={e => { setDeadlines(prev => ({ ...prev, [key]: e.target.value })); setSavedDeadlines(prev => ({ ...prev, [key]: false })); }}
+                    type="date"
+                    value={openVal}
+                    onChange={e => setPeriods(prev => ({ ...prev, [openKey]: e.target.value }))}
+                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                  <span className="text-slate-400 text-sm flex-shrink-0">〜</span>
+                  <input
+                    type="date"
+                    value={closeVal}
+                    onChange={e => setPeriods(prev => ({ ...prev, [closeKey]: e.target.value }))}
                     className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                   <button
-                    onClick={() => saveDeadline(year, month)}
+                    onClick={() => savePeriod(year, month)}
                     className={`px-3 py-2 text-sm font-medium rounded-xl flex-shrink-0 transition-colors ${
                       saved ? 'bg-green-100 text-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
                     {saved ? '✓' : '保存'}
                   </button>
-                  {val && (
-                    <button onClick={() => clearDeadline(year, month)} className="text-xs text-red-400 hover:text-red-600 flex-shrink-0">解除</button>
-                  )}
                 </div>
-                {val && (
+                {hasPeriod && (
                   <p className="text-xs text-slate-400 mt-1">
-                    締切: {new Date(val).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    提出可能期間: {openVal ? new Date(openVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'} 〜 {closeVal ? new Date(closeVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'}
                   </p>
                 )}
               </div>
