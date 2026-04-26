@@ -38,6 +38,35 @@ export default function ShiftsPage() {
   // ポップアップ
   const [popup, setPopup] = useState<{ date: string; day: Date } | null>(null);
 
+  // 初回マウント時：提出期間がアクティブな月に自動ジャンプ
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const candidates = Array.from({ length: 4 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+    const keys = candidates.flatMap(c => [
+      `period_open_${formatYM(c.year, c.month)}`,
+      `period_close_${formatYM(c.year, c.month)}`,
+    ]);
+    supabase.from('app_settings').select('key, value').in('key', keys)
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data ?? []).forEach(({ key, value }: { key: string; value: string }) => { map[key] = value ?? ''; });
+        for (const c of candidates) {
+          const ym = formatYM(c.year, c.month);
+          const open = map[`period_open_${ym}`] ?? '';
+          const close = map[`period_close_${ym}`] ?? '';
+          if ((open || close) && (!open || today >= open) && (!close || today <= close)) {
+            setYear(c.year);
+            setMonth(c.month);
+            return;
+          }
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => { setDays(getDaysInMonth(year, month)); }, [year, month]);
 
   useEffect(() => {
