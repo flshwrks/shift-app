@@ -9,7 +9,7 @@ export interface User {
   display_order?: number;
 }
 
-export type ShiftType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'custom';
+export type ShiftType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'custom';
 export type ShiftStatus = 'draft' | 'confirmed';
 
 export interface Shift {
@@ -39,6 +39,7 @@ export const SHIFT_PRESETS: Record<Exclude<ShiftType, 'custom'>, { start: string
   D: { start: '09:00', end: '18:00', label: 'D  9:00〜18:00' },
   E: { start: '13:00', end: '22:00', label: 'E 13:00〜22:00' },
   F: { start: '17:00', end: '22:00', label: 'F 17:00〜22:00' },
+  G: { start: '09:00', end: '22:00', label: 'G  9:00〜22:00' },
 };
 
 export const SHIFT_COLORS: Record<ShiftType, string> = {
@@ -48,6 +49,7 @@ export const SHIFT_COLORS: Record<ShiftType, string> = {
   D: '#F59E0B',
   E: '#EF4444',
   F: '#EC4899',
+  G: '#0EA5E9',
   custom: '#6B7280',
 };
 

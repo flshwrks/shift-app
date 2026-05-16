@@ -179,7 +179,6 @@ export default function AdminStaffPage() {
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">名前</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">権限</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">PIN</th>
-                <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap hidden sm:table-cell">登録日</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
@@ -215,9 +214,6 @@ export default function AdminStaffPage() {
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
                     <PinCell pin={u.pin} />
-                  </td>
-                  <td className="px-5 py-3 text-slate-400 hidden sm:table-cell whitespace-nowrap">
-                    {new Date(u.created_at).toLocaleDateString('ja-JP')}
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openEdit(u)}

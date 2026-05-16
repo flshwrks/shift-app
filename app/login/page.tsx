@@ -26,7 +26,7 @@ export default function LoginPage() {
     supabase
       .from('users')
       .select('id, name, role, created_at')
-      .order('name')
+      .order('display_order', { ascending: true, nullsFirst: false })
       .then(({ data }) => setUsers(data ?? []));
   }, []);
 

@@ -8,6 +8,7 @@ import TimelineView from '@/components/TimelineView';
 import ShiftDetailModal from '@/components/ShiftDetailModal';
 import type { Shift, User, ShiftType } from '@/lib/types';
 import { SHIFT_PRESETS, SHIFT_COLORS } from '@/lib/types';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 type ViewMode = 'table' | 'timeline';
 
@@ -32,6 +33,7 @@ function ShiftModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  useBodyScrollLock();
   const existing = state.shift;
   const [userId, setUserId] = useState(state.userId);
   const [date, setDate] = useState(state.date);
@@ -200,20 +202,39 @@ export default function AdminSchedulePage() {
   const [view, setView] = useState<ViewMode>('table');
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [memos, setMemos] = useState<Record<string, string>>({});
   const [isConfirming, setIsConfirming] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [detailShift, setDetailShift] = useState<Shift | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  useBodyScrollLock(reminderOpen);
 
   const fetchData = useCallback(async () => {
-    const [{ data: usersData }, { data: shiftsData }] = await Promise.all([
+    const start = monthStart(year, month);
+    const end = monthEnd(year, month);
+    const memoKeys: string[] = [];
+    for (let d = new Date(start); d <= new Date(end); d.setDate(d.getDate() + 1)) {
+      memoKeys.push(`memo_${d.toISOString().split('T')[0]}`);
+    }
+    const [{ data: usersData }, { data: shiftsData }, { data: memosData }] = await Promise.all([
       supabase.from('users').select('id, name, role, created_at').order('display_order', { ascending: true, nullsFirst: false }),
-      supabase.from('shifts').select('*').gte('date', monthStart(year, month)).lte('date', monthEnd(year, month)).order('date'),
+      supabase.from('shifts').select('*').gte('date', start).lte('date', end).order('date'),
+      supabase.from('app_settings').select('key, value').in('key', memoKeys),
     ]);
     setUsers(usersData ?? []);
     setShifts(shiftsData ?? []);
+    const memoMap: Record<string, string> = {};
+    (memosData ?? []).forEach(({ key, value }: { key: string; value: string }) => {
+      memoMap[key.replace('memo_', '')] = value;
+    });
+    setMemos(memoMap);
   }, [year, month]);
+
+  const handleMemoChange = async (date: string, value: string) => {
+    setMemos(prev => ({ ...prev, [date]: value }));
+    await supabase.from('app_settings').upsert({ key: `memo_${date}`, value });
+  };
 
   useEffect(() => {
     fetchData();
@@ -328,8 +349,8 @@ export default function AdminSchedulePage() {
       </div>
 
       {view === 'table'
-        ? <TableView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onCellClick={handleCellClick} onShiftClick={s => setDetailShift(s)} />
-        : <TimelineView year={year} month={month} users={users} shifts={shifts} isAdmin onConfirm={handleConfirm} onShiftClick={s => setDetailShift(s)} />}
+        ? <TableView year={year} month={month} users={users} shifts={shifts} memos={memos} onMemoChange={handleMemoChange} isAdmin onConfirm={handleConfirm} onCellClick={handleCellClick} onShiftClick={s => setDetailShift(s)} />
+        : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onMemoChange={handleMemoChange} isAdmin onConfirm={handleConfirm} onShiftClick={s => setDetailShift(s)} />}
 
       {modal && (
         <ShiftModal

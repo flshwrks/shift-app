@@ -72,3 +72,17 @@ export function isWeekend(date: Date): boolean {
   const dow = date.getDay();
   return dow === 0 || dow === 6;
 }
+
+export function netWorkMinutes(startTime: string, endTime: string): number {
+  const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+  if (duration > 8 * 60) return duration - 60;
+  if (duration > 6 * 60) return duration - 45;
+  return duration;
+}
+
+export function formatTotalHours(minutes: number): string {
+  if (minutes === 0) return '-';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h${m}m`;
+}

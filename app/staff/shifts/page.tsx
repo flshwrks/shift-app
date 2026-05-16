@@ -6,8 +6,9 @@ import {
   getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, isWeekend,
 } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
-const SHIFT_LIST = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+const SHIFT_LIST = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 interface DayShift {
   shiftType: ShiftType | null;
@@ -35,8 +36,19 @@ export default function ShiftsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
 
-  // ポップアップ
   const [popup, setPopup] = useState<{ date: string; day: Date } | null>(null);
+  const [showDraftAlert, setShowDraftAlert] = useState(false);
+  const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+  useBodyScrollLock(popup !== null || showDraftAlert || showSubmitPrompt);
+
+  // ①：起動時に未提出の下書きがあればアラートを表示
+  useEffect(() => {
+    if (!user) return;
+    const prefix = `shift_draft_${user.id}_`;
+    if (Object.keys(localStorage).some(k => k.startsWith(prefix))) {
+      setShowDraftAlert(true);
+    }
+  }, [user]);
 
   // 初回マウント時：提出期間がアクティブな月に自動ジャンプ
   useEffect(() => {
@@ -152,11 +164,17 @@ export default function ShiftsPage() {
 
   const applyEdit = () => {
     if (!popup) return;
-    setShifts(prev => ({
-      ...prev,
-      [popup.date]: { ...editShift, dirty: true },
-    }));
+    const newShifts = { ...shifts, [popup.date]: { ...editShift, dirty: true } };
+    setShifts(newShifts);
     setPopup(null);
+
+    // ③：全日程を入力し終えたら提出を促す
+    const remaining = days.filter(day => {
+      const s = newShifts[formatDate(day)];
+      return !s?.shiftType && !s?.existingId && !s?.dirty;
+    }).length;
+    const newDirtyCount = Object.values(newShifts).filter(s => s.dirty).length;
+    if (remaining === 0 && newDirtyCount > 0) setShowSubmitPrompt(true);
   };
 
   const selectType = (type: ShiftType | null) => {
@@ -169,9 +187,11 @@ export default function ShiftsPage() {
   };
 
   const today = new Date().toISOString().split('T')[0];
+  const monthsAhead = (year - now.getFullYear()) * 12 + (month - now.getMonth());
   const periodSet = !!(openDate || closeDate);
   const inPeriod = (!openDate || today >= openDate) && (!closeDate || today <= closeDate);
-  const isLocked = periodSet && !inPeriod;
+  const isFarFuture = !periodSet && monthsAhead >= 3;
+  const isLocked = isFarFuture || (periodSet && !inPeriod);
 
   const fmtPeriodDate = (d: string) =>
     new Date(d + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' });
@@ -224,6 +244,36 @@ export default function ShiftsPage() {
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
+  // コピーモード
+  const [copyingShift, setCopyingShift] = useState<DayShift | null>(null);
+  const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
+
+  const startCopy = (date: string) => {
+    setCopyingShift({ ...shifts[date] });
+    setCopyTargets(new Set());
+  };
+
+  const toggleCopyTarget = (date: string) => {
+    setCopyTargets(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  };
+
+  const applyCopy = () => {
+    if (!copyingShift) return;
+    setShifts(prev => {
+      const next = { ...prev };
+      copyTargets.forEach(date => { next[date] = { ...copyingShift, dirty: true, existingId: prev[date]?.existingId, status: prev[date]?.status }; });
+      return next;
+    });
+    setCopyingShift(null);
+    setCopyTargets(new Set());
+  };
+
+  const cancelCopy = () => { setCopyingShift(null); setCopyTargets(new Set()); };
+
   const [copying, setCopying] = useState(false);
   const copyFromPrevMonth = async () => {
     if (!user || copying) return;
@@ -265,7 +315,7 @@ export default function ShiftsPage() {
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2">
           <button onClick={prevMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">◀</button>
-          <h2 className="text-lg font-bold text-slate-800">{year}年{month + 1}月</h2>
+          <h2 className="text-lg font-bold text-slate-800 whitespace-nowrap">{year}年{month + 1}月</h2>
           <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">▶</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -286,9 +336,20 @@ export default function ShiftsPage() {
         </div>
       </div>
 
-      {isLocked && (
+      {copyingShift && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
+          <span className="text-blue-700 text-sm font-medium">
+            {copyingShift.shiftType === 'custom'
+              ? `${copyingShift.startTime}〜${copyingShift.endTime}`
+              : copyingShift.shiftType ?? '休み'} をコピー中 — コピー先を選択
+          </span>
+          <button onClick={cancelCopy} className="text-xs text-blue-500 hover:text-blue-700 flex-shrink-0">キャンセル</button>
+        </div>
+      )}
+
+      {isLocked && !copyingShift && (
         <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
-          提出期間外のため申請できません
+          {isFarFuture ? '申請期間が設定されていないため申請できません' : '提出期間外のため申請できません'}
         </div>
       )}
 
@@ -336,6 +397,7 @@ export default function ShiftsPage() {
                       {s.shiftType === 'custom' ? `${s.startTime}〜${s.endTime}` : `${s.shiftType}  ${s.startTime}〜${s.endTime}`}
                     </span>
                     {s.dirty && <span className="text-[10px] text-blue-500 font-medium">未提出</span>}
+                    {!s.dirty && s.status === 'draft' && <span className="text-[10px] text-amber-600 font-medium">申請中</span>}
                     {!s.dirty && s.status === 'confirmed' && <span className="text-[10px] text-green-600 font-medium">確定</span>}
                   </div>
                 ) : (
@@ -344,22 +406,62 @@ export default function ShiftsPage() {
                 {s.comment && <p className="text-xs text-slate-400 mt-0.5 truncate">{s.comment}</p>}
               </div>
 
-              {/* 入力ボタン（期間外は非表示） */}
-              {!isLocked && (
+              {/* コピーモード：選択トグル */}
+              {copyingShift && (
                 <button
-                  onClick={() => openPopup(key, day)}
-                  className="flex-shrink-0 w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
+                  onClick={() => toggleCopyTarget(key)}
+                  className={`flex-shrink-0 w-9 h-9 rounded-xl border-2 flex items-center justify-center text-sm transition-colors ${
+                    copyTargets.has(key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 text-slate-300'
+                  }`}
                 >
-                  入力
+                  {copyTargets.has(key) ? '✓' : ''}
                 </button>
+              )}
+
+              {/* 通常モード：入力 + コピーボタン */}
+              {!copyingShift && !isLocked && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {s.shiftType && (
+                    <button
+                      onClick={() => startCopy(key)}
+                      className="px-2 h-9 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-600 text-slate-400 text-xs font-medium transition-colors active:scale-95"
+                      title="他の日にコピー"
+                    >
+                      コピー
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openPopup(key, day)}
+                    className="w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
+                  >
+                    入力
+                  </button>
+                </div>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* まとめて提出ボタン（固定フッター、期間外は非表示） */}
-      {!isLocked && (
+      {/* コピーモードフッター */}
+      {copyingShift && (
+        <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
+          <button
+            onClick={applyCopy}
+            disabled={copyTargets.size === 0}
+            className={`w-full h-14 rounded-2xl text-base font-bold transition-all active:scale-[0.98] ${
+              copyTargets.size === 0
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+            }`}
+          >
+            {copyTargets.size > 0 ? `${copyTargets.size}日にコピーする` : 'コピー先を選択してください'}
+          </button>
+        </div>
+      )}
+
+      {/* まとめて提出ボタン（固定フッター、期間外・コピーモードは非表示） */}
+      {!isLocked && !copyingShift && (
         <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
           <button
             onClick={handleSubmitAll}
@@ -374,6 +476,64 @@ export default function ShiftsPage() {
           >
             {submitting ? '提出中…' : submitDone ? '✓ 提出完了' : dirtyCount > 0 ? `${dirtyCount}日分をまとめて提出` : '変更なし'}
           </button>
+        </div>
+      )}
+
+      {/* ① 未提出アラート */}
+      {showDraftAlert && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-3xl leading-none">📋</span>
+              <div>
+                <p className="font-bold text-slate-800">未提出のシフトがあります</p>
+                <p className="text-sm text-slate-500 mt-0.5">前回の入力がまだ提出されていません。確認して提出してください。</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDraftAlert(false)}
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+              >
+                確認する
+              </button>
+              <button
+                onClick={() => setShowDraftAlert(false)}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+              >
+                あとで
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ③ 全日程入力完了→提出促進 */}
+      {showSubmitPrompt && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-3xl">✅</span>
+            </div>
+            <p className="font-bold text-slate-800 text-base">全日程の入力が完了しました</p>
+            <p className="text-sm text-slate-500 mt-1 mb-5">
+              {Object.values(shifts).filter(s => s.dirty).length}日分をまとめて提出しますか？
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowSubmitPrompt(false); handleSubmitAll(); }}
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+              >
+                今すぐ提出
+              </button>
+              <button
+                onClick={() => setShowSubmitPrompt(false)}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+              >
+                あとで
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

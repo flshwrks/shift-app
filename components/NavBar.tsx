@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import HelpModal from '@/components/HelpModal';
 
 const staffNav = [
   { href: '/staff/shifts', label: 'シフト申請', icon: '📝' },
@@ -22,6 +23,7 @@ export default function NavBar() {
   const router = useRouter();
   const [orgName, setOrgName] = useState('');
   const [hasDraft, setHasDraft] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     supabase.from('app_settings').select('value').eq('key', 'org_name').single()
@@ -37,7 +39,6 @@ export default function NavBar() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // localStorage に未提出の下書きがあるか確認（スタッフのみ）
   useEffect(() => {
     if (!user || user.role !== 'staff') return;
     const prefix = `shift_draft_${user.id}_`;
@@ -70,6 +71,13 @@ export default function NavBar() {
             )}
           </div>
           <span className="text-xs text-slate-500 truncate max-w-[80px] flex-shrink-0">{user?.name}</span>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold flex items-center justify-center flex-shrink-0 transition-colors"
+            title="使い方"
+          >
+            ?
+          </button>
           <button
             onClick={handleLogout}
             className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 active:bg-slate-200 flex-shrink-0"
@@ -127,6 +135,10 @@ export default function NavBar() {
           })}
         </div>
       </div>
+
+      {showHelp && user && (
+        <HelpModal role={user.role as 'admin' | 'staff'} onClose={() => setShowHelp(false)} />
+      )}
     </>
   );
 }

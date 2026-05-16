@@ -1,5 +1,6 @@
 'use client';
-import { getDaysInMonth, formatDate, getDayLabel } from '@/lib/shifts';
+import { useState, useEffect } from 'react';
+import { getDaysInMonth, formatDate, getDayLabel, netWorkMinutes, formatTotalHours } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
 import type { User } from '@/lib/types';
 
@@ -8,7 +9,10 @@ interface Props {
   month: number;
   users: User[];
   shifts: Shift[];
+  memos?: Record<string, string>;
+  onMemoChange?: (date: string, value: string) => void;
   isAdmin?: boolean;
+  currentUserId?: string;
   onConfirm?: (shiftId: string) => void;
   onCellClick?: (userId: string, date: string, shift?: Shift) => void;
   onShiftClick?: (shift: Shift) => void;
@@ -18,8 +22,47 @@ function getShiftLabel(s: Shift): string {
   return `${s.shift_type === 'custom' ? '' : s.shift_type + ' '}${s.start_time}〜${s.end_time}`;
 }
 
-export default function TableView({ year, month, users, shifts, isAdmin, onConfirm, onCellClick, onShiftClick }: Props) {
+function calcTotalMinutes(userId: string, shiftMap: Record<string, Record<string, Shift>>): number {
+  const userShifts = shiftMap[userId];
+  if (!userShifts) return 0;
+  return Object.values(userShifts).reduce((sum, s) => sum + netWorkMinutes(s.start_time, s.end_time), 0);
+}
+
+function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v: string) => void; expanded: boolean }) {
+  const [local, setLocal] = useState(value);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => { setLocal(value); }, [value]);
+
+  if (onChange && editing) {
+    return (
+      <textarea
+        autoFocus
+        value={local}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={() => { setEditing(false); if (local !== value) onChange(local); }}
+        rows={3}
+        className="w-full text-[10px] text-slate-700 bg-blue-50 rounded px-1 py-0.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-300 leading-relaxed"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => onChange && setEditing(true)}
+      className={`text-[10px] break-words whitespace-pre-wrap leading-relaxed px-1 ${
+        expanded ? '' : 'line-clamp-2'
+      } ${value ? 'text-slate-600' : 'text-slate-300'} ${onChange ? 'cursor-text' : ''}`}
+    >
+      {value || (onChange ? 'メモ' : '')}
+    </div>
+  );
+}
+
+export default function TableView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onCellClick, onShiftClick }: Props) {
   const days = getDaysInMonth(year, month);
+  const [allExpanded, setAllExpanded] = useState(false);
+  const hasMemos = Object.values(memos).some(v => v);
 
   const shiftMap: Record<string, Record<string, Shift>> = {};
   shifts.forEach((s) => {
@@ -31,10 +74,16 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
     <div className="overflow-auto rounded-xl border border-slate-200 bg-white">
       <table className="border-collapse text-xs min-w-full">
         <thead>
+          {/* 日付行 */}
           <tr className="bg-slate-50">
             <th className="sticky left-0 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 border-b border-r border-slate-200 min-w-[100px] z-10">
               スタッフ
             </th>
+            {isAdmin && (
+              <th className="px-3 py-3 font-semibold text-slate-600 border-b border-r border-slate-200 whitespace-nowrap bg-slate-50 text-center">
+                月計
+              </th>
+            )}
             {days.map((d) => {
               const dow = d.getDay();
               return (
@@ -49,14 +98,53 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
               );
             })}
           </tr>
+          {/* メモ行 */}
+          <tr className="bg-white border-b border-slate-200">
+            <th className="sticky left-0 bg-white px-4 py-1 text-left text-[10px] font-medium text-slate-400 border-r border-slate-200 z-10 whitespace-nowrap align-top">
+              <div className="flex items-center gap-1 pt-0.5">
+                メモ
+                {hasMemos && (
+                  <button
+                    onClick={() => setAllExpanded(v => !v)}
+                    className="text-[9px] text-blue-400 hover:text-blue-600 leading-none"
+                    title={allExpanded ? 'すべて閉じる' : 'すべて展開'}
+                  >
+                    {allExpanded ? '▲' : '▼'}
+                  </button>
+                )}
+              </div>
+            </th>
+            {isAdmin && <td className="border-r border-slate-100" />}
+            {days.map((d) => {
+              const key = formatDate(d);
+              return (
+                <td key={key} className="px-1 py-1 border-r border-slate-100 min-w-[64px]">
+                  <MemoCell
+                    value={memos[key] ?? ''}
+                    expanded={allExpanded}
+                    onChange={isAdmin && onMemoChange ? (v) => onMemoChange(key, v) : undefined}
+                  />
+                </td>
+              );
+            })}
+          </tr>
         </thead>
         <tbody>
-          {users.map((u, ui) => (
-            <tr key={u.id} className={ui % 2 === 0 ? '' : 'bg-slate-50/50'}>
-              <td className="sticky left-0 bg-white px-4 py-2.5 font-medium text-slate-700 border-r border-slate-200 z-10 whitespace-nowrap">
-                {ui % 2 === 0 ? '' : <span className="sr-only" />}
+          {users.map((u, ui) => {
+            const totalMin = calcTotalMinutes(u.id, shiftMap);
+            const isMe = currentUserId === u.id;
+            return (
+            <tr key={u.id} className={isMe ? 'bg-blue-50/40' : ui % 2 === 0 ? '' : 'bg-slate-50/50'}>
+              <td className={`sticky left-0 px-4 py-2.5 font-medium border-r border-slate-200 z-10 whitespace-nowrap ${isMe ? 'bg-blue-50 text-blue-700 border-l-2 border-l-blue-400' : 'bg-white text-slate-700'}`}>
                 {u.name}
               </td>
+              {isAdmin && (
+                <td className="px-3 py-2.5 border-r border-slate-200 text-center whitespace-nowrap">
+                  <span className={`text-xs font-semibold ${totalMin > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                    {formatTotalHours(totalMin)}
+                  </span>
+                </td>
+              )}
               {days.map((d) => {
                 const key = formatDate(d);
                 const s = shiftMap[u.id]?.[key];
@@ -99,7 +187,8 @@ export default function TableView({ year, month, users, shifts, isAdmin, onConfi
                 );
               })}
             </tr>
-          ))}
+          );
+          })}
         </tbody>
       </table>
     </div>

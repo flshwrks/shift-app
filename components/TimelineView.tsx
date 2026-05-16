@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { getDaysInMonth, formatDate, timeToMinutes } from '@/lib/shifts';
 import { SHIFT_COLORS, type Shift } from '@/lib/types';
 import type { User } from '@/lib/types';
@@ -12,6 +13,7 @@ const COL_WIDTH = 128;
 const TIME_COL_WIDTH = 44;
 const COUNT_BAR_HEIGHT = 48;
 const HEADER_HEIGHT = 40;
+const MEMO_HEIGHT = 32;
 
 const HOURS = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
@@ -20,7 +22,10 @@ interface Props {
   month: number;
   users: User[];
   shifts: Shift[];
+  memos?: Record<string, string>;
+  onMemoChange?: (date: string, value: string) => void;
   isAdmin?: boolean;
+  currentUserId?: string;
   onConfirm?: (shiftId: string) => void;
   onShiftClick?: (shift: Shift) => void;
 }
@@ -46,9 +51,42 @@ function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: n
   return result;
 }
 
-export default function TimelineView({ year, month, users, shifts, isAdmin, onConfirm, onShiftClick }: Props) {
+function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v: string) => void; expanded: boolean }) {
+  const [local, setLocal] = useState(value);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => { setLocal(value); }, [value]);
+
+  if (onChange && editing) {
+    return (
+      <textarea
+        autoFocus
+        value={local}
+        onChange={e => setLocal(e.target.value)}
+        onBlur={() => { setEditing(false); if (local !== value) onChange(local); }}
+        rows={3}
+        className="w-full text-[10px] text-slate-700 bg-blue-50 rounded px-1 py-0.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-300 leading-relaxed"
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => onChange && setEditing(true)}
+      className={`w-full text-[10px] break-words whitespace-pre-wrap leading-relaxed px-1 ${
+        expanded ? '' : 'line-clamp-2'
+      } ${value ? 'text-slate-600' : 'text-slate-300'} ${onChange ? 'cursor-text' : ''}`}
+    >
+      {value || (onChange ? 'メモ' : '')}
+    </div>
+  );
+}
+
+export default function TimelineView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onShiftClick }: Props) {
   const days = getDaysInMonth(year, month);
   const minWidth = TIME_COL_WIDTH + COL_WIDTH * days.length;
+  const [allExpanded, setAllExpanded] = useState(false);
+  const hasMemos = Object.values(memos).some(v => v);
 
   const shiftsByDate: Record<string, Shift[]> = {};
   shifts.forEach((s) => {
@@ -83,21 +121,15 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
-      {/* スクロールコンテナ（overflow-auto が sticky の基準になる） */}
       <div className="overflow-auto">
         <div style={{ minWidth }}>
 
           {/* ===== 日付ヘッダー行（sticky top） ===== */}
-          <div
-            className="flex sticky top-0 z-20 border-b border-slate-200"
-            style={{ minWidth }}
-          >
-            {/* コーナー（sticky top + left） */}
+          <div className="flex sticky top-0 z-20 border-b border-slate-200" style={{ minWidth }}>
             <div
               className="flex-shrink-0 sticky left-0 z-30 bg-slate-50 border-r border-slate-200"
               style={{ width: TIME_COL_WIDTH, height: HEADER_HEIGHT }}
             />
-            {/* 日付セル */}
             {days.map((day) => {
               const dow = day.getDay();
               const isSun = dow === 0;
@@ -121,9 +153,43 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
             })}
           </div>
 
+          {/* ===== メモ行 ===== */}
+          <div className="flex border-b border-slate-200" style={{ minWidth }}>
+            <div
+              className="flex-shrink-0 sticky left-0 z-10 bg-white border-r border-slate-200 flex flex-col items-start px-2 pt-2 gap-0.5"
+              style={{ width: TIME_COL_WIDTH, minHeight: MEMO_HEIGHT }}
+            >
+              <span className="text-[9px] text-slate-400 leading-none">メモ</span>
+              {hasMemos && (
+                <button
+                  onClick={() => setAllExpanded(v => !v)}
+                  className="text-[9px] text-blue-400 hover:text-blue-600 leading-none"
+                  title={allExpanded ? 'すべて閉じる' : 'すべて展開'}
+                >
+                  {allExpanded ? '▲' : '▼'}
+                </button>
+              )}
+            </div>
+            {days.map((day) => {
+              const dateStr = formatDate(day);
+              return (
+                <div
+                  key={dateStr}
+                  className="flex-shrink-0 border-r border-slate-100 flex items-start py-1.5"
+                  style={{ width: COL_WIDTH, minHeight: MEMO_HEIGHT }}
+                >
+                  <MemoCell
+                    value={memos[dateStr] ?? ''}
+                    expanded={allExpanded}
+                    onChange={isAdmin && onMemoChange ? (v) => onMemoChange(dateStr, v) : undefined}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
           {/* ===== シフトエリア行 ===== */}
           <div className="flex">
-            {/* 時刻軸（sticky left） */}
             <div
               className="flex-shrink-0 sticky left-0 z-10 bg-white border-r border-slate-200 relative"
               style={{ width: TIME_COL_WIDTH, height: TOTAL_HEIGHT }}
@@ -136,7 +202,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
               ))}
             </div>
 
-            {/* 日付ごとのシフト列 */}
             {days.map((day) => {
               const dateStr = formatDate(day);
               const dayShifts = shiftsByDate[dateStr] ?? [];
@@ -152,7 +217,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                   className={`flex-shrink-0 border-r border-slate-100 relative ${isSun ? 'bg-red-50/30' : isSat ? 'bg-blue-50/20' : ''}`}
                   style={{ width: COL_WIDTH, height: TOTAL_HEIGHT }}
                 >
-                  {/* 人数不足の背景 */}
                   {counts.map((count, i) => {
                     const bg = slotBg(count, i);
                     if (!bg) return null;
@@ -167,7 +231,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                     );
                   })}
 
-                  {/* グリッド線 */}
                   {HOURS.map((h) => (
                     <div key={h} className="absolute left-0 right-0 border-t border-slate-200"
                       style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />
@@ -177,7 +240,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                       style={{ top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
                   ))}
 
-                  {/* シフトブロック */}
                   {dayShifts.map((s) => {
                     const { lane, totalLanes } = laneMap.get(s.id) ?? { lane: 0, totalLanes: 1 };
                     const startMin = timeToMinutes(s.start_time);
@@ -188,6 +250,8 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                     const l = (lane / totalLanes) * COL_WIDTH;
                     const staffUser = users.find((u) => u.id === s.user_id);
                     const name = staffUser?.name ?? '?';
+                    const isMe = currentUserId != null && s.user_id === currentUserId;
+                    const isOther = currentUserId != null && !isMe;
 
                     return (
                       <div
@@ -198,13 +262,14 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                           height: Math.max(height, 28),
                           left: l,
                           width: w,
-                          backgroundColor: SHIFT_COLORS[s.shift_type] + 'CC',
-                          borderLeft: `3px solid ${SHIFT_COLORS[s.shift_type]}`,
+                          backgroundColor: SHIFT_COLORS[s.shift_type] + (isOther ? '70' : 'CC'),
+                          borderLeft: `${isMe ? 4 : 3}px solid ${SHIFT_COLORS[s.shift_type]}`,
+                          boxShadow: isMe ? `0 0 0 1.5px white, 0 0 0 2.5px ${SHIFT_COLORS[s.shift_type]}` : undefined,
+                          opacity: isOther ? 0.7 : 1,
                         }}
                         onClick={() => onShiftClick?.(s)}
                         title={`${name}  ${s.start_time}〜${s.end_time}${s.comment ? `  ${s.comment}` : ''}`}
                       >
-                        {/* 名前行（幅が狭い場合は2文字表示） */}
                         <div className="flex items-start justify-between px-1 pt-0.5 gap-0.5">
                           <span className="text-white text-[10px] font-bold leading-tight drop-shadow-sm flex-1 min-w-0"
                             style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: w >= 60 ? 'ellipsis' : 'clip' }}>
@@ -214,7 +279,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
                             <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
                           )}
                         </div>
-                        {/* 時間行（常時表示） */}
                         <span className="text-white/90 text-[9px] leading-tight truncate px-1">
                           {s.start_time}〜{s.end_time}
                         </span>
@@ -234,16 +298,14 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
             })}
           </div>
 
-          {/* ===== 人数バー行（sticky bottom はブラウザ互換が低いので省略） ===== */}
+          {/* ===== 人数バー行 ===== */}
           <div className="flex border-t-2 border-slate-300" style={{ minWidth }}>
-            {/* ラベル（sticky left） */}
             <div
               className="flex-shrink-0 sticky left-0 z-10 bg-slate-50 border-r border-slate-200"
               style={{ width: TIME_COL_WIDTH, height: COUNT_BAR_HEIGHT }}
             >
               <span className="text-[9px] text-slate-400 pl-1.5 pt-1 block leading-none">人数</span>
             </div>
-            {/* バー */}
             {days.map((day) => {
               const dateStr = formatDate(day);
               const counts = getSlotCounts(dateStr);
@@ -272,7 +334,6 @@ export default function TimelineView({ year, month, users, shifts, isAdmin, onCo
         </div>
       </div>
 
-      {/* 凡例 */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-t border-slate-200 bg-slate-50 text-xs text-slate-500">
         <span className="font-medium text-slate-600">人数:</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm inline-block bg-green-500" /> 2人以上</span>

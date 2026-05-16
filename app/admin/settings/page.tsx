@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { formatYM } from '@/lib/shifts';
 
@@ -12,9 +13,10 @@ function getUpcomingMonths(count = 6): { year: number; month: number; label: str
 }
 
 export default function AdminSettingsPage() {
+  const router = useRouter();
   const months = getUpcomingMonths(6);
   const [periods, setPeriods] = useState<Record<string, string>>({});
-  const [savedPeriods, setSavedPeriods] = useState<Record<string, boolean>>({});
+  const [committedPeriods, setCommittedPeriods] = useState<Record<string, string>>({});
   const [orgName, setOrgName] = useState('');
   const [orgSaved, setOrgSaved] = useState(false);
 
@@ -31,6 +33,7 @@ export default function AdminSettingsPage() {
         const map: Record<string, string> = {};
         (data ?? []).forEach(({ key, value }: { key: string; value: string }) => { map[key] = value; });
         setPeriods(map);
+        setCommittedPeriods(map);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -45,13 +48,11 @@ export default function AdminSettingsPage() {
     const ym = formatYM(year, month);
     const openKey = `period_open_${ym}`;
     const closeKey = `period_close_${ym}`;
-    const saveKey = `${ym}`;
     await Promise.all([
       supabase.from('app_settings').upsert({ key: openKey, value: periods[openKey] ?? '' }),
       supabase.from('app_settings').upsert({ key: closeKey, value: periods[closeKey] ?? '' }),
     ]);
-    setSavedPeriods(prev => ({ ...prev, [saveKey]: true }));
-    setTimeout(() => setSavedPeriods(prev => ({ ...prev, [saveKey]: false })), 2000);
+    setCommittedPeriods(prev => ({ ...prev, [openKey]: periods[openKey] ?? '', [closeKey]: periods[closeKey] ?? '' }));
   };
 
   const clearPeriod = async (year: number, month: number) => {
@@ -63,6 +64,7 @@ export default function AdminSettingsPage() {
       supabase.from('app_settings').upsert({ key: closeKey, value: '' }),
     ]);
     setPeriods(prev => ({ ...prev, [openKey]: '', [closeKey]: '' }));
+    setCommittedPeriods(prev => ({ ...prev, [openKey]: '', [closeKey]: '' }));
   };
 
   return (
@@ -103,7 +105,7 @@ export default function AdminSettingsPage() {
             const closeKey = `period_close_${ym}`;
             const openVal = periods[openKey] ?? '';
             const closeVal = periods[closeKey] ?? '';
-            const saved = savedPeriods[ym];
+            const isUnchanged = openVal === (committedPeriods[openKey] ?? '') && closeVal === (committedPeriods[closeKey] ?? '');
             const hasPeriod = openVal || closeVal;
             return (
               <div key={ym}>
@@ -131,11 +133,12 @@ export default function AdminSettingsPage() {
                   />
                   <button
                     onClick={() => savePeriod(year, month)}
+                    disabled={isUnchanged}
                     className={`px-3 py-2 text-sm font-medium rounded-xl flex-shrink-0 transition-colors ${
-                      saved ? 'bg-green-100 text-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                      isUnchanged ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {saved ? '✓' : '保存'}
+                    保存
                   </button>
                 </div>
                 {hasPeriod && (
@@ -149,6 +152,20 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
+      {/* 人件費予測 */}
+      <button
+        onClick={() => router.push('/admin/labor-cost')}
+        className="w-full bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+      >
+        <div>
+          <h3 className="font-semibold text-slate-700">人件費予測</h3>
+          <p className="text-xs text-slate-400 mt-0.5">月別の労働時間 × 時給で概算人件費を確認</p>
+        </div>
+        <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       {/* シフト種別一覧 */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-700 mb-3">シフト種別</h3>
@@ -159,8 +176,8 @@ export default function AdminSettingsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {(['A','B','C','D','E','F'] as const).map(type => {
-              const p = { A:['8:00','13:00',5], B:['9:00','14:00',5], C:['8:00','17:00',9], D:['9:00','18:00',9], E:['13:00','22:00',9], F:['17:00','22:00',5] }[type] as [string,string,number];
+            {(['A','B','C','D','E','F','G'] as const).map(type => {
+              const p = { A:['8:00','13:00',5], B:['9:00','14:00',5], C:['8:00','17:00',9], D:['9:00','18:00',9], E:['13:00','22:00',9], F:['17:00','22:00',5], G:['9:00','22:00',13] }[type] as [string,string,number];
               return (
                 <tr key={type}>
                   <td className="py-1.5 font-bold text-blue-600">{type}</td>

@@ -1,6 +1,7 @@
 'use client';
 import { SHIFT_COLORS } from '@/lib/types';
 import type { Shift, User } from '@/lib/types';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 const DAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function ShiftDetailModal({ shift, users, isAdmin, onClose, onEdit, onConfirm }: Props) {
+  useBodyScrollLock();
   const staffUser = users.find(u => u.id === shift.user_id);
   const d = new Date(shift.date + 'T00:00:00');
   const dateLabel = `${d.getMonth() + 1}月${d.getDate()}日（${DAY_JA[d.getDay()]}）`;
