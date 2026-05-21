@@ -50,7 +50,7 @@ export default function NavBar() {
     return () => window.removeEventListener('storage', check);
   }, [user]);
 
-  const navItems = user?.role === 'admin' ? adminNav : staffNav;
+  const navItems = (user?.role === 'admin' || user?.role === 'developer') ? adminNav : staffNav;
 
   const handleLogout = () => {
     logout();
@@ -137,7 +137,7 @@ export default function NavBar() {
       </div>
 
       {showHelp && user && (
-        <HelpModal role={user.role as 'admin' | 'staff'} onClose={() => setShowHelp(false)} />
+        <HelpModal role={user.role === 'staff' ? 'staff' : 'admin'} onClose={() => setShowHelp(false)} />
       )}
     </>
   );

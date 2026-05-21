@@ -43,7 +43,7 @@ export default function AdminStaffPage() {
 
   const loadUsers = async () => {
     const { data } = await supabase.from('users').select('id, name, role, pin, display_order, created_at').order('display_order', { ascending: true, nullsFirst: false });
-    setUsers(data ?? []);
+    setUsers((data ?? []).filter((u: User) => u.role !== 'developer'));
   };
 
   useEffect(() => { loadUsers(); }, []);

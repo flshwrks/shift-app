@@ -15,10 +15,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [devMode, setDevMode] = useState(false);
 
   useEffect(() => {
     if (user) {
-      router.replace(user.role === 'admin' ? '/admin/schedule' : '/staff/shifts');
+      router.replace(user.role === 'staff' ? '/staff/shifts' : '/admin/schedule');
     }
   }, [user, router]);
 
@@ -29,6 +30,23 @@ export default function LoginPage() {
       .order('display_order', { ascending: true, nullsFirst: false })
       .then(({ data }) => setUsers(data ?? []));
   }, []);
+
+  const handleDevKey = (key: string) => {
+    if (key === 'del') { setPin(p => p.slice(0, -1)); setError(''); return; }
+    if (pin.length >= 4) return;
+    const next = pin + key;
+    setPin(next);
+    if (next.length === 4) {
+      if (next === '0805') {
+        login({ id: '__dev__', name: '開発者', role: 'developer' });
+      } else {
+        setIsShaking(true);
+        setError('パスワードが違います');
+        setPin('');
+        setTimeout(() => setIsShaking(false), 400);
+      }
+    }
+  };
 
   const handleKey = async (key: string) => {
     if (key === 'del') {
@@ -67,6 +85,50 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (devMode) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className={`bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
+          <button
+            onClick={() => { setDevMode(false); setPin(''); setError(''); }}
+            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1"
+          >
+            ← 戻る
+          </button>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-2xl font-mono text-slate-500">&lt;/&gt;</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800">開発者モード</h2>
+            <p className="text-slate-500 text-sm mt-1">パスワードを入力してください</p>
+          </div>
+          <div className="flex justify-center gap-4 mb-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className={`w-4 h-4 rounded-full transition-all ${i < pin.length ? 'bg-slate-700' : 'bg-slate-200'}`} />
+            ))}
+          </div>
+          {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
+          <div className="grid grid-cols-3 gap-3">
+            {['1','2','3','4','5','6','7','8','9','','0','del'].map((k) => (
+              <button
+                key={k}
+                onClick={() => k && handleDevKey(k)}
+                disabled={!k}
+                className={`h-14 rounded-xl text-lg font-semibold transition-all active:scale-95 ${
+                  k === 'del' ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : k === '' ? 'bg-transparent cursor-default'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                } disabled:opacity-50`}
+              >
+                {k === 'del' ? '⌫' : k}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (selected) {
     return (
@@ -157,6 +219,14 @@ export default function LoginPage() {
             ))}
           </div>
         )}
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => { setDevMode(true); setPin(''); setError(''); }}
+            className="text-[11px] text-slate-300 hover:text-slate-400 font-mono px-2 py-1 rounded transition-colors"
+          >
+            &lt;/&gt;
+          </button>
+        </div>
       </div>
     </div>
   );
