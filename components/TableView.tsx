@@ -19,13 +19,14 @@ interface Props {
 }
 
 function getShiftLabel(s: Shift): string {
+  if (s.shift_type === 'off') return '休み';
   return `${s.shift_type === 'custom' ? '' : s.shift_type + ' '}${s.start_time}〜${s.end_time}`;
 }
 
 function calcTotalMinutes(userId: string, shiftMap: Record<string, Record<string, Shift>>): number {
   const userShifts = shiftMap[userId];
   if (!userShifts) return 0;
-  return Object.values(userShifts).reduce((sum, s) => sum + netWorkMinutes(s.start_time, s.end_time), 0);
+  return Object.values(userShifts).reduce((sum, s) => s.shift_type === 'off' ? sum : sum + netWorkMinutes(s.start_time, s.end_time), 0);
 }
 
 function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v: string) => void; expanded: boolean }) {

@@ -95,7 +95,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
   });
 
   function getSlotCounts(date: string): number[] {
-    const dayShifts = shiftsByDate[date] ?? [];
+    const dayShifts = (shiftsByDate[date] ?? []).filter(s => s.shift_type !== 'off');
     return Array.from({ length: 28 }, (_, i) => {
       const slotStart = START_HOUR * 60 + i * 30;
       const slotEnd = slotStart + 30;
@@ -204,7 +204,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
 
             {days.map((day) => {
               const dateStr = formatDate(day);
-              const dayShifts = shiftsByDate[dateStr] ?? [];
+              const dayShifts = (shiftsByDate[dateStr] ?? []).filter(s => s.shift_type !== 'off');
               const counts = getSlotCounts(dateStr);
               const laneMap = assignLanes(dayShifts);
               const dow = day.getDay();

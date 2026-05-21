@@ -178,8 +178,8 @@ export default function ShiftsPage() {
   };
 
   const selectType = (type: ShiftType | null) => {
-    if (type && type !== 'custom') {
-      const p = SHIFT_PRESETS[type as Exclude<ShiftType, 'custom'>];
+    if (type && type !== 'custom' && type !== 'off') {
+      const p = SHIFT_PRESETS[type as Exclude<ShiftType, 'custom' | 'off'>];
       setEditShift(e => ({ ...e, shiftType: type, startTime: p.start, endTime: p.end }));
     } else {
       setEditShift(e => ({ ...e, shiftType: type }));

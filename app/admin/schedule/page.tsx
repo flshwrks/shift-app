@@ -48,7 +48,7 @@ function ShiftModal({
   const days = getDaysInMonth(year, month);
   const dateOptions = days.map(d => formatDate(d));
 
-  function selectPreset(type: Exclude<ShiftType, 'custom'>) {
+  function selectPreset(type: Exclude<ShiftType, 'custom' | 'off'>) {
     setShiftType(type);
     setStartTime(SHIFT_PRESETS[type].start);
     setEndTime(SHIFT_PRESETS[type].end);
@@ -58,16 +58,16 @@ function ShiftModal({
     setError('');
     if (!userId) return setError('スタッフを選択してください');
     if (!date) return setError('日付を選択してください');
-    if (startTime >= endTime) return setError('終了時刻は開始時刻より後にしてください');
+    if (shiftType !== 'off' && startTime >= endTime) return setError('終了時刻は開始時刻より後にしてください');
     setSaving(true);
     if (existing) {
       const { error: e } = await supabase.from('shifts').update({
-        user_id: userId, date, shift_type: shiftType, start_time: startTime, end_time: endTime, comment,
+        user_id: userId, date, shift_type: shiftType, start_time: shiftType === 'off' ? '00:00' : startTime, end_time: shiftType === 'off' ? '00:00' : endTime, comment,
       }).eq('id', existing.id);
       if (e) { setError(e.message); setSaving(false); return; }
     } else {
       const { error: e } = await supabase.from('shifts').upsert(
-        { user_id: userId, date, shift_type: shiftType, start_time: startTime, end_time: endTime, comment, status: 'confirmed' },
+        { user_id: userId, date, shift_type: shiftType, start_time: shiftType === 'off' ? '00:00' : startTime, end_time: shiftType === 'off' ? '00:00' : endTime, comment, status: 'confirmed' },
         { onConflict: 'user_id,date' }
       );
       if (e) { setError(e.message); setSaving(false); return; }
@@ -113,7 +113,7 @@ function ShiftModal({
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">シフト種別</label>
             <div className="grid grid-cols-4 gap-1 mb-2">
-              {(Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom'>[]).map(type => (
+              {(Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom' | 'off'>[]).map(type => (
                 <button
                   key={type}
                   onClick={() => selectPreset(type)}
@@ -133,24 +133,31 @@ function ShiftModal({
               >
                 カスタム
               </button>
+              <button
+                onClick={() => setShiftType('off')}
+                className="py-1.5 rounded-lg text-xs font-bold text-white col-span-2 transition-opacity"
+                style={{ backgroundColor: SHIFT_COLORS.off, opacity: shiftType === 'off' ? 1 : 0.4 }}
+              >
+                休み
+              </button>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                step="1800"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-              <span className="text-slate-400 text-sm">〜</span>
-              <input
-                type="time"
-                step="1800"
-                value={endTime}
-                onChange={e => setEndTime(e.target.value)}
-                className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-            </div>
+            {shiftType !== 'off' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={e => { if (e.target.value) { setStartTime(e.target.value); setShiftType('custom'); } }}
+                  className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <span className="text-slate-400 text-sm">〜</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={e => { if (e.target.value) { setEndTime(e.target.value); setShiftType('custom'); } }}
+                  className="flex-1 border border-slate-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+            )}
           </div>
 
           {/* コメント */}
