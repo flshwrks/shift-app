@@ -67,7 +67,7 @@ function ShiftModal({
       if (e) { setError(e.message); setSaving(false); return; }
     } else {
       const { error: e } = await supabase.from('shifts').upsert(
-        { user_id: userId, date, shift_type: shiftType, start_time: shiftType === 'off' ? '00:00' : startTime, end_time: shiftType === 'off' ? '00:00' : endTime, comment, status: 'confirmed' },
+        { user_id: userId, date, shift_type: shiftType, start_time: shiftType === 'off' ? '00:00' : startTime, end_time: shiftType === 'off' ? '00:00' : endTime, comment, status: 'draft' },
         { onConflict: 'user_id,date' }
       );
       if (e) { setError(e.message); setSaving(false); return; }
