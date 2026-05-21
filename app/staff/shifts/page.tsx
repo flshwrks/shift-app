@@ -215,8 +215,8 @@ export default function ShiftsPage() {
         user_id: user.id,
         date,
         shift_type: s.shiftType!,
-        start_time: s.startTime,
-        end_time: s.endTime,
+        start_time: s.shiftType === 'off' ? '00:00' : s.startTime,
+        end_time: s.shiftType === 'off' ? '00:00' : s.endTime,
         comment: s.comment,
         status: 'draft' as const,
       }));
@@ -339,9 +339,11 @@ export default function ShiftsPage() {
       {copyingShift && (
         <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
           <span className="text-blue-700 text-sm font-medium">
-            {copyingShift.shiftType === 'custom'
+            {copyingShift.shiftType === 'off'
+              ? '休み'
+              : copyingShift.shiftType === 'custom'
               ? `${copyingShift.startTime}〜${copyingShift.endTime}`
-              : copyingShift.shiftType ?? '休み'} をコピー中 — コピー先を選択
+              : copyingShift.shiftType ?? '未選択'} をコピー中 — コピー先を選択
           </span>
           <button onClick={cancelCopy} className="text-xs text-blue-500 hover:text-blue-700 flex-shrink-0">キャンセル</button>
         </div>
@@ -394,14 +396,14 @@ export default function ShiftsPage() {
                 {s.shiftType ? (
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-white text-xs font-bold" style={{ backgroundColor: SHIFT_COLORS[s.shiftType] }}>
-                      {s.shiftType === 'custom' ? `${s.startTime}〜${s.endTime}` : `${s.shiftType}  ${s.startTime}〜${s.endTime}`}
+                      {s.shiftType === 'off' ? '休み' : s.shiftType === 'custom' ? `${s.startTime}〜${s.endTime}` : `${s.shiftType}  ${s.startTime}〜${s.endTime}`}
                     </span>
                     {s.dirty && <span className="text-[10px] text-blue-500 font-medium">未提出</span>}
                     {!s.dirty && s.status === 'draft' && <span className="text-[10px] text-amber-600 font-medium">申請中</span>}
                     {!s.dirty && s.status === 'confirmed' && <span className="text-[10px] text-green-600 font-medium">確定</span>}
                   </div>
                 ) : (
-                  <span className="text-sm text-slate-300">{s.dirty ? '休み（未提出）' : '—'}</span>
+                  <span className="text-sm text-slate-300">—</span>
                 )}
                 {s.comment && <p className="text-xs text-slate-400 mt-0.5 truncate">{s.comment}</p>}
               </div>
@@ -548,9 +550,19 @@ export default function ShiftsPage() {
             {/* ハンドル */}
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
 
-            <h3 className="text-base font-bold text-slate-800 mb-4">
-              {getDayLabel(popup.day)} のシフト
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-slate-800">
+                {getDayLabel(popup.day)} のシフト
+              </h3>
+              {editShift.shiftType && (
+                <button
+                  onClick={() => setEditShift(e => ({ ...e, shiftType: null }))}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  選択解除
+                </button>
+              )}
+            </div>
 
             {/* シフト種別ボタン */}
             <div className="grid grid-cols-2 gap-2 mb-3">
@@ -590,17 +602,15 @@ export default function ShiftsPage() {
               <div className="flex items-center gap-2 mb-3 px-1">
                 <input
                   type="time"
-                  step="1800"
                   value={editShift.startTime}
-                  onChange={e => setEditShift(ev => ({ ...ev, startTime: e.target.value }))}
+                  onChange={e => { if (e.target.value) setEditShift(ev => ({ ...ev, startTime: e.target.value })); }}
                   className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <span className="text-slate-400">〜</span>
                 <input
                   type="time"
-                  step="1800"
                   value={editShift.endTime}
-                  onChange={e => setEditShift(ev => ({ ...ev, endTime: e.target.value }))}
+                  onChange={e => { if (e.target.value) setEditShift(ev => ({ ...ev, endTime: e.target.value })); }}
                   className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
               </div>
@@ -608,12 +618,14 @@ export default function ShiftsPage() {
 
             {/* 休み */}
             <button
-              onClick={() => selectType(null)}
-              className={`w-full p-3.5 rounded-2xl border-2 mb-4 font-medium transition-all ${
-                editShift.shiftType === null ? 'border-slate-300 bg-slate-100 text-slate-600' : 'border-slate-100 bg-slate-50 text-slate-400'
+              onClick={() => selectType('off')}
+              className={`w-full flex items-center justify-between p-3.5 rounded-2xl border-2 mb-4 font-medium transition-all ${
+                editShift.shiftType === 'off' ? 'border-transparent text-white' : 'border-slate-100 bg-slate-50 text-slate-500'
               }`}
+              style={editShift.shiftType === 'off' ? { backgroundColor: SHIFT_COLORS.off } : {}}
             >
-              休み / 申請なし
+              <span className="font-bold">休み</span>
+              <span className={`text-xs ${editShift.shiftType === 'off' ? 'text-white/80' : 'text-slate-400'}`}>休暇・公休など</span>
             </button>
 
             {/* コメント */}
