@@ -44,7 +44,17 @@ Tier 1適用直後は、`users` への INSERT/UPDATE/DELETE が anon に開放�
 
 ローカルで実際にビルド済みアプリを起動し、本番のSupabaseプロジェクトに対して以下を確認済み: スタッフ作成→発行PINでのログイン→編集（名前・権限・PIN変更の並列更新）→新PINでのログイン→削除、権限チェック（未ログイン・スタッフ権限それぞれ403）、並び替え（不正なリクエストは全体を拒否、正常なリクエストは対象行のみ更新され他の列は無傷）。テスト用に作成したデータはすべて削除し、実データへの影響なし。
 
-**⚠️ 追加で適用が必要な作業**: `supabase/migrations/2026-07-25c_lock_users_writes.sql` を、新しいAPIルートのデプロイ後に（=このコードが本番で動作することを確認してから）Supabase SQL Editorで実行してください。この最後の一手が完了して初めて、usersテーブルへの直接書込みが完全に閉じます。
+**✅ 適用済み**: `2026-07-25c_lock_users_writes.sql` はユーザー自身がSupabase SQL Editorで実行済み。
+
+### ⚠️ インシデント記録: admin_set_pin のPUBLIC権限の見落とし（2026-07-25、発生・対応済み）
+
+`2026-07-25c` 適用後の動作確認で、`revoke execute on function public.admin_set_pin(uuid, text) from anon, authenticated;` だけでは不十分だったことが判明した。
+
+**原因**: Postgresは関数を作成すると、デフォルトでEXECUTE権限を **PUBLIC** に自動付与する（テーブルには無い、関数特有の挙動）。`anon`/`authenticated` は暗黙にPUBLICの権限を継承するため、この2ロールから明示的にrevokeしても、PUBLICへの権限が残っていれば依然として誰でも呼び出せる。
+
+**実際に起きたこと**: この抜け穴が塞がっているかを確認するテスト呼び出し（`curl`でanonキーから`admin_set_pin`を直接叩く検証）が実際に成功してしまい、**実在するスタッフ1名（佐藤さん）のPINが意図せず`0000`に書き換わった**。発見直後にservice role経由で新しいランダムなPIN（`2568`、ユーザーに口頭で共有済み）に再設定し、`revoke execute on function public.admin_set_pin(uuid, text) from public;`（`2026-07-25d_fix_admin_set_pin_public_grant.sql`）を追加適用して抜け穴を完全に閉じた。適用後、anonキーからの直接呼び出しが `permission denied for function admin_set_pin` で拒否されること、サービスロール経由の正規APIは引き続き動作することを確認済み。
+
+**教訓**: Postgresの関数にはPUBLICへの暗黙付与があるため、`SECURITY DEFINER` 関数の権限を絞る際は `anon, authenticated` だけでなく **`public` も明示的にrevokeする**こと（`verify_login` はログイン用途で意図的に公開のままにしている＝問題なし）。今後同様のRPCを追加する際は、この点を最初のマイグレーションから含めること。
 
 **残存リスク（今後の課題）**: 同様のパターンを `shifts`（確定操作）・`shift_requests`（取消・確定）・`app_settings`（提出期間・組織名）にも拡大することが望ましい（現状はこれらも行レベルで全開放だが、`users` ほど致命的ではないため優先度を下げている）。
 
