@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import { hashPin } from '@/lib/shifts';
 import type { User } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 
@@ -43,15 +42,25 @@ export default function LoginPage() {
   };
 
   const handleDevKey = (key: string) => {
-    handlePinKey(key, (code) => {
-      if (code === '0805') {
-        login({ id: '__dev__', name: '開発者', role: 'developer' });
-      } else {
-        setIsShaking(true);
-        setError('パスワードが違います');
-        setPin('');
-        setTimeout(() => setIsShaking(false), 400);
-      }
+    handlePinKey(key, async (code) => {
+      setIsLoading(true);
+      try {
+        const res = await fetch('/api/dev-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const { ok } = await res.json().catch(() => ({ ok: false }));
+        if (ok) {
+          login({ id: '__dev__', name: '開発者', role: 'developer' });
+          return;
+        }
+      } catch {}
+      setIsShaking(true);
+      setError('パスワードが違います');
+      setPin('');
+      setTimeout(() => setIsShaking(false), 400);
+      setIsLoading(false);
     });
   };
 
@@ -63,18 +72,14 @@ export default function LoginPage() {
     if (!selected) return;
     setIsLoading(true);
     try {
-      const hashed = await hashPin(enteredPin);
-      const { data } = await supabase
-        .from('users')
-        .select('id, name, role')
-        .eq('id', selected.id)
-        .eq('pin_hash', hashed)
-        .single();
+      const { data, error } = await supabase
+        .rpc('verify_login', { p_user_id: selected.id, p_pin: enteredPin })
+        .maybeSingle<{ id: string; name: string; role: User['role'] }>();
       if (data) {
         login({ id: data.id, name: data.name, role: data.role });
       } else {
         setIsShaking(true);
-        setError('PINコードが違います');
+        setError(error ? 'しばらくしてから再度お試しください' : 'PINコードが違います');
         setPin('');
         setTimeout(() => setIsShaking(false), 400);
       }
@@ -111,7 +116,7 @@ export default function LoginPage() {
               <button
                 key={k}
                 onClick={() => k && handleDevKey(k)}
-                disabled={!k}
+                disabled={!k || isLoading}
                 className={`h-14 rounded-xl text-lg font-medium tabular-nums transition-all active:scale-95 ${
                   k === 'del' ? 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                   : k === '' ? 'bg-transparent cursor-default'

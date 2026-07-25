@@ -22,6 +22,7 @@ export default function StaffRequestsPage() {
   const [requests, setRequests] = useState<RequestWithTarget[]>([]);
   const [processing, setProcessing] = useState<string | null>(null);
   const [overwriteConfirm, setOverwriteConfirm] = useState<RequestWithTarget | null>(null);
+  const [actionError, setActionError] = useState('');
 
   const fetchRequests = useCallback(async () => {
     if (!user) return;
@@ -88,8 +89,31 @@ export default function StaffRequestsPage() {
   const doAccept = async (req: RequestWithTarget) => {
     if (!user) return;
     setProcessing(req.id);
+    setActionError('');
 
-    await supabase.from('shifts').upsert(
+    // 二重承諾防止: status が 'open' の間だけ 'fulfilled' に変更できる原子的な更新。
+    // 複数人がほぼ同時に「受ける」を押しても、最初の1件だけがここを通過する。
+    const { data: claimed, error: claimError } = await supabase
+      .from('shift_requests')
+      .update({ status: 'fulfilled' })
+      .eq('id', req.id)
+      .eq('status', 'open')
+      .select('id');
+    if (claimError) {
+      setActionError(`依頼状態の更新に失敗しました: ${claimError.message}`);
+      setProcessing(null);
+      return;
+    }
+    if (!claimed || claimed.length === 0) {
+      setActionError('この依頼はすでに他の方が受けたか、取り消されています。');
+      setProcessing(null);
+      setOverwriteConfirm(null);
+      fetchRequests();
+      return;
+    }
+    const revertClaim = () => supabase.from('shift_requests').update({ status: 'open' }).eq('id', req.id);
+
+    const { error: shiftError } = await supabase.from('shifts').upsert(
       {
         user_id: user.id,
         date: req.date,
@@ -101,22 +125,38 @@ export default function StaffRequestsPage() {
       },
       { onConflict: 'user_id,date' }
     );
+    if (shiftError) {
+      setActionError(`シフトの登録に失敗しました: ${shiftError.message}`);
+      setProcessing(null);
+      await revertClaim();
+      return;
+    }
 
     if (req.myTarget) {
-      await supabase
+      const { error: targetError } = await supabase
         .from('shift_request_targets')
         .update({ status: 'accepted', responded_at: new Date().toISOString() })
         .eq('id', req.myTarget.id);
+      if (targetError) {
+        setActionError(`応答の記録に失敗しました: ${targetError.message}`);
+        setProcessing(null);
+        await revertClaim();
+        return;
+      }
     } else {
-      await supabase.from('shift_request_targets').insert({
+      const { error: targetError } = await supabase.from('shift_request_targets').insert({
         request_id: req.id,
         user_id: user.id,
         status: 'accepted',
         responded_at: new Date().toISOString(),
       });
+      if (targetError) {
+        setActionError(`応答の記録に失敗しました: ${targetError.message}`);
+        setProcessing(null);
+        await revertClaim();
+        return;
+      }
     }
-
-    await supabase.from('shift_requests').update({ status: 'fulfilled' }).eq('id', req.id);
 
     setProcessing(null);
     setOverwriteConfirm(null);
@@ -126,19 +166,23 @@ export default function StaffRequestsPage() {
   const declineRequest = async (req: RequestWithTarget) => {
     if (!user) return;
     setProcessing(req.id);
+    setActionError('');
 
-    if (req.myTarget) {
-      await supabase
-        .from('shift_request_targets')
-        .update({ status: 'declined', responded_at: new Date().toISOString() })
-        .eq('id', req.myTarget.id);
-    } else {
-      await supabase.from('shift_request_targets').insert({
-        request_id: req.id,
-        user_id: user.id,
-        status: 'declined',
-        responded_at: new Date().toISOString(),
-      });
+    const { error } = req.myTarget
+      ? await supabase
+          .from('shift_request_targets')
+          .update({ status: 'declined', responded_at: new Date().toISOString() })
+          .eq('id', req.myTarget.id)
+      : await supabase.from('shift_request_targets').insert({
+          request_id: req.id,
+          user_id: user.id,
+          status: 'declined',
+          responded_at: new Date().toISOString(),
+        });
+    if (error) {
+      setActionError(`辞退の記録に失敗しました: ${error.message}`);
+      setProcessing(null);
+      return;
     }
 
     setProcessing(null);
@@ -184,6 +228,12 @@ export default function StaffRequestsPage() {
           過去の依頼
         </button>
       </div>
+
+      {actionError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
+          {actionError}
+        </div>
+      )}
 
       {displayedRequests.length === 0 ? (
         <div className="text-center py-16 text-slate-400">

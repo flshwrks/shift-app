@@ -1,13 +1,25 @@
 -- シフト管理アプリ Supabase スキーマ
+--
+-- 注意: このファイルは「ゼロから新規構築する場合」のベースライン定義です。
+-- 既存環境（このファイルより前に作成済みのプロジェクト）には
+-- supabase/migrations/2026-07-25_security_hardening.sql を別途適用してください。
+-- 詳細な経緯・残存リスクは docs/SECURITY.md を参照。
+
+-- pgcrypto（bcryptによるPINハッシュ化に使用）
+create extension if not exists pgcrypto;
 
 -- ユーザーテーブル
 create table if not exists public.users (
   id uuid default gen_random_uuid() primary key,
   name text not null unique,
-  pin_hash text not null,
+  pin_hash text,
   role text not null default 'staff' check (role in ('admin', 'staff')),
+  display_order int,
+  failed_pin_attempts int not null default 0,
+  pin_locked_until timestamptz,
   created_at timestamptz default now()
 );
+-- role='developer' はDBには保存されない、クライアント限定の合成ロール（app/api/dev-login 経由）
 
 -- シフトテーブル
 create table if not exists public.shifts (
@@ -36,7 +48,8 @@ insert into public.app_settings (key, value)
 values ('deadline', '')
 on conflict (key) do nothing;
 
--- RLS を有効化（オープンポリシー: アプリ側で認証を管理）
+-- RLS を有効化
+-- users 以外は引き続きオープンポリシー（アプリ側で認証を管理。残存リスクは docs/SECURITY.md 参照）
 alter table public.users enable row level security;
 alter table public.shifts enable row level security;
 alter table public.app_settings enable row level security;
@@ -45,9 +58,65 @@ drop policy if exists "allow_all_users" on public.users;
 drop policy if exists "allow_all_shifts" on public.shifts;
 drop policy if exists "allow_all_settings" on public.app_settings;
 
+-- users: 行の可視性(RLS)は全開放のままだが、列単位の権限で pin_hash 等の機微列だけを隠す
+-- （PIN検証・設定は verify_login / admin_set_pin の SECURITY DEFINER RPC 経由に限定）
 create policy "allow_all_users" on public.users for all using (true) with check (true);
 create policy "allow_all_shifts" on public.shifts for all using (true) with check (true);
 create policy "allow_all_settings" on public.app_settings for all using (true) with check (true);
+
+revoke select on public.users from anon, authenticated;
+grant select (id, name, role, display_order, created_at) on public.users to anon, authenticated;
+
+-- PIN検証RPC（bcrypt比較 + 失敗ロックアウト。詳細は migrations/2026-07-25_security_hardening.sql）
+create or replace function public.verify_login(p_user_id uuid, p_pin text)
+returns table(id uuid, name text, role text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user public.users%rowtype;
+begin
+  select * into v_user from public.users u where u.id = p_user_id;
+  if not found then
+    return;
+  end if;
+  if v_user.pin_locked_until is not null and v_user.pin_locked_until > now() then
+    raise exception 'アカウントがロックされています。しばらくしてから再度お試しください。' using errcode = 'P0001';
+  end if;
+  if v_user.pin_hash = crypt(p_pin, v_user.pin_hash) then
+    update public.users u set failed_pin_attempts = 0, pin_locked_until = null where u.id = p_user_id;
+    return query select v_user.id, v_user.name, v_user.role;
+  else
+    update public.users u
+      set failed_pin_attempts = u.failed_pin_attempts + 1,
+          pin_locked_until = case when u.failed_pin_attempts + 1 >= 5 then now() + interval '15 minutes' else u.pin_locked_until end
+      where u.id = p_user_id;
+    return;
+  end if;
+end;
+$$;
+
+grant execute on function public.verify_login(uuid, text) to anon, authenticated;
+
+-- PIN設定RPC（スタッフ追加・編集・PINリセット時に使用）
+create or replace function public.admin_set_pin(p_user_id uuid, p_new_pin text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_new_pin !~ '^\d{4}$' then
+    raise exception 'PINは数字4桁で指定してください' using errcode = 'P0001';
+  end if;
+  update public.users u
+    set pin_hash = crypt(p_new_pin, gen_salt('bf', 10)), failed_pin_attempts = 0, pin_locked_until = null
+    where u.id = p_user_id;
+end;
+$$;
+
+grant execute on function public.admin_set_pin(uuid, text) to anon, authenticated;
 
 -- リアルタイム設定
 alter publication supabase_realtime add table public.shifts;

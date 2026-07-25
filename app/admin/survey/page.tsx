@@ -44,6 +44,7 @@ export default function AdminSurveyPage() {
   const [options, setOptions] = useState<SurveyOption[]>([]);
   const [responses, setResponses] = useState<ResponseRow[]>([]);
   const [staffCount, setStaffCount] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<Survey | null>(null);
 
   const fetchSurveys = useCallback(async () => {
     const { data } = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
@@ -56,7 +57,7 @@ export default function AdminSurveyPage() {
     const [{ data: opts }, { data: resps }, { count }] = await Promise.all([
       supabase.from('survey_options').select('*').eq('survey_id', surveyId).order('display_order'),
       supabase.from('survey_responses').select('id, option_id, custom_text, user:users(name)').eq('survey_id', surveyId),
-      supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'staff'),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'staff'),
     ]);
     setOptions(opts ?? []);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,9 +101,10 @@ export default function AdminSurveyPage() {
     fetchSurveys();
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from('surveys').delete().eq('id', id);
-    if (viewingId === id) setViewingId(null);
+  const handleDelete = async (survey: Survey) => {
+    await supabase.from('surveys').delete().eq('id', survey.id);
+    if (viewingId === survey.id) setViewingId(null);
+    setDeleteTarget(null);
     fetchSurveys();
   };
 
@@ -215,7 +217,7 @@ export default function AdminSurveyPage() {
                       公布する
                     </button>
                     <button
-                      onClick={() => handleDelete(survey.id)}
+                      onClick={() => setDeleteTarget(survey)}
                       className="px-3 py-1.5 bg-slate-100 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50"
                     >
                       削除
@@ -292,6 +294,28 @@ export default function AdminSurveyPage() {
           </div>
         );
       })}
+
+      {/* 削除確認モーダル */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold tracking-tight text-slate-900 mb-2">アンケートを削除</h3>
+            <p className="text-slate-600 text-sm mb-6">
+              <span className="font-semibold">{deleteTarget.title}</span> を削除します。この操作は取り消せません。
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => handleDelete(deleteTarget)}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700">
+                削除する
+              </button>
+              <button onClick={() => setDeleteTarget(null)}
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

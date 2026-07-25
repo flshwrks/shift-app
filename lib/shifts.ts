@@ -1,14 +1,5 @@
 import { DAY_NAMES_JA } from './types';
 
-export async function hashPin(pin: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin + 'shift_app_salt_v1');
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 export function generateTimeSlots(): string[] {
   const slots: string[] = [];
   for (let hour = 8; hour <= 22; hour++) {
@@ -75,6 +66,7 @@ export function isWeekend(date: Date): boolean {
 
 export function netWorkMinutes(startTime: string, endTime: string): number {
   const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+  if (duration <= 0) return 0;
   if (duration > 8 * 60) return duration - 60;
   if (duration > 6 * 60) return duration - 45;
   return duration;

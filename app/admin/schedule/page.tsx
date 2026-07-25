@@ -220,6 +220,7 @@ export default function AdminSchedulePage() {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [requestModal, setRequestModal] = useState<{ date?: string; startTime?: string; endTime?: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [actionError, setActionError] = useState('');
   useBodyScrollLock(reminderOpen);
 
   const fetchData = useCallback(async () => {
@@ -259,18 +260,33 @@ export default function AdminSchedulePage() {
     return () => { supabase.removeChannel(channel); };
   }, [year, month, fetchData]);
 
-  const handleConfirm = async (shiftId: string) => {
-    await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shiftId);
+  const handleConfirm = async (shiftId: string): Promise<boolean> => {
+    setActionError('');
+    const { error } = await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shiftId);
+    if (error) {
+      setActionError(`確定に失敗しました: ${error.message}`);
+      return false;
+    }
     setShifts(prev => prev.map(s => s.id === shiftId ? { ...s, status: 'confirmed' } : s));
+    return true;
   };
 
   const handleConfirmAll = async () => {
+    setActionError('');
     setIsConfirming(true);
-    const draftIds = shifts.filter(s => s.status === 'draft').map(s => s.id);
-    if (draftIds.length === 0) { setIsConfirming(false); return; }
-    await supabase.from('shifts').update({ status: 'confirmed' }).in('id', draftIds);
-    setShifts(prev => prev.map(s => ({ ...s, status: 'confirmed' })));
-    setIsConfirming(false);
+    try {
+      const draftIds = shifts.filter(s => s.status === 'draft').map(s => s.id);
+      if (draftIds.length === 0) return;
+      const { error } = await supabase.from('shifts').update({ status: 'confirmed' }).in('id', draftIds);
+      if (error) {
+        setActionError(`確定に失敗しました: ${error.message}`);
+        return;
+      }
+      const draftIdSet = new Set(draftIds);
+      setShifts(prev => prev.map(s => draftIdSet.has(s.id) ? { ...s, status: 'confirmed' } : s));
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   const handleCellClick = (userId: string, date: string, shift?: Shift) => {
@@ -370,6 +386,12 @@ export default function AdminSchedulePage() {
         </div>
       </div>
 
+      {actionError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
+          {actionError}
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3">
           <p className="text-[11px] font-medium text-slate-500">申請数</p>
@@ -408,8 +430,8 @@ export default function AdminSchedulePage() {
           onClose={() => setDetailShift(null)}
           onEdit={() => { setModal({ userId: detailShift.user_id, date: detailShift.date, shift: detailShift }); setDetailShift(null); }}
           onConfirm={async () => {
-            await handleConfirm(detailShift.id);
-            setDetailShift(prev => prev ? { ...prev, status: 'confirmed' } : null);
+            const ok = await handleConfirm(detailShift.id);
+            if (ok) setDetailShift(prev => prev ? { ...prev, status: 'confirmed' } : null);
           }}
         />
       )}

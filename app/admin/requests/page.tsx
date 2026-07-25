@@ -24,8 +24,10 @@ export default function AdminRequestsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [shiftMap, setShiftMap] = useState<Record<string, ShiftInfo>>({});
   const [showModal, setShowModal] = useState(false);
-  const [cancelConfirm, setCancelConfirm] = useState<{ id: string; acceptedNames: string[] } | null>(null);
+  const [cancelConfirm, setCancelConfirm] = useState<ShiftRequest | null>(null);
+  const [cancelError, setCancelError] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState('');
 
   const fetchData = useCallback(async () => {
     const start = `${year}-${String(month + 1).padStart(2, '0')}-01`;
@@ -65,17 +67,27 @@ export default function AdminRequestsPage() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  const handleCancel = async (id: string) => {
-    await supabase.from('shift_requests').update({ status: 'cancelled' }).eq('id', id);
+  const handleCancel = async (req: ShiftRequest) => {
+    // 承諾済みの下書きシフトが残っていると「依頼は取消済みなのにシフトだけ残る」
+    // 不整合が起きるため、取消と同時に削除する。確定済みシフトがある場合は
+    // このフローでは取消できないようにする（ボタン側でも disabled にしている）。
+    const acceptedShift = getAcceptedShift(req);
+    if (acceptedShift?.status === 'confirmed') return;
+
+    setCancelError('');
+    if (acceptedShift) {
+      const { error } = await supabase.from('shifts').delete().eq('id', acceptedShift.id);
+      if (error) { setCancelError('シフトの削除に失敗しました: ' + error.message); return; }
+    }
+    const { error } = await supabase.from('shift_requests').update({ status: 'cancelled' }).eq('id', req.id);
+    if (error) { setCancelError('依頼の取消に失敗しました: ' + error.message); return; }
     setCancelConfirm(null);
     fetchData();
   };
 
   const startCancel = (req: ShiftRequest) => {
-    const acceptedNames = (req.targets ?? [])
-      .filter(t => t.status === 'accepted')
-      .map(t => t.user?.name ?? '不明');
-    setCancelConfirm({ id: req.id, acceptedNames });
+    setCancelError('');
+    setCancelConfirm(req);
   };
 
   const confirmShift = async (req: ShiftRequest) => {
@@ -86,8 +98,10 @@ export default function AdminRequestsPage() {
     if (!shift) return;
 
     setConfirming(req.id);
-    await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shift.id);
+    setConfirmError('');
+    const { error } = await supabase.from('shifts').update({ status: 'confirmed' }).eq('id', shift.id);
     setConfirming(null);
+    if (error) { setConfirmError('確定に失敗しました: ' + error.message); return; }
     fetchData();
   };
 
@@ -247,6 +261,9 @@ export default function AdminRequestsPage() {
                     {!isConfirmed && (
                       <p className="text-xs text-slate-400 mt-2">確定するとスタッフの下書きシフトが確定されます</p>
                     )}
+                    {confirming === null && confirmError && (
+                      <p className="text-xs text-red-500 mt-2">{confirmError}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -264,23 +281,33 @@ export default function AdminRequestsPage() {
         />
       )}
 
-      {cancelConfirm && (
+      {cancelConfirm && (() => {
+        const acceptedTarget = (cancelConfirm.targets ?? []).find((t: ShiftRequestTarget) => t.status === 'accepted');
+        const acceptedShift = getAcceptedShift(cancelConfirm);
+        const blockedByConfirmed = acceptedShift?.status === 'confirmed';
+        return (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm">
             <h3 className="text-base font-semibold text-slate-900 mb-2">依頼を取り消しますか？</h3>
-            {cancelConfirm.acceptedNames.length > 0 && (
+            {blockedByConfirmed ? (
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
-                <p className="text-sm text-red-700 font-medium">⚠️ 承諾済みのスタッフがいます</p>
-                <p className="text-sm text-red-600 mt-0.5">{cancelConfirm.acceptedNames.join('、')} に取消通知が届きます</p>
+                <p className="text-sm text-red-700 font-medium">⚠️ このシフトはすでに確定済みです</p>
+                <p className="text-sm text-red-600 mt-0.5">取消するには、シフト管理画面から直接シフトを削除してください</p>
               </div>
-            )}
-            {cancelConfirm.acceptedNames.length === 0 && (
+            ) : acceptedTarget ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
+                <p className="text-sm text-red-700 font-medium">⚠️ {acceptedTarget.user?.name ?? '承諾済みのスタッフ'} が承諾済みです</p>
+                <p className="text-sm text-red-600 mt-0.5">取消すると、登録された下書きシフトも削除されます</p>
+              </div>
+            ) : (
               <p className="text-sm text-slate-500 mb-4">この操作は取り消せません。</p>
             )}
+            {cancelError && <p className="text-sm text-red-500 mb-3">{cancelError}</p>}
             <div className="space-y-2">
               <button
-                onClick={() => handleCancel(cancelConfirm.id)}
-                className="w-full py-3 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-colors"
+                onClick={() => handleCancel(cancelConfirm)}
+                disabled={blockedByConfirmed}
+                className="w-full py-3 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 取り消す
               </button>
@@ -293,7 +320,8 @@ export default function AdminRequestsPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

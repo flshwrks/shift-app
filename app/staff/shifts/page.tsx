@@ -27,6 +27,25 @@ const defaultDay = (): DayShift => ({
   shiftType: null, startTime: '08:00', endTime: '17:00', comment: '', dirty: false,
 });
 
+function OverwriteConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm">
+        <h3 className="text-base font-bold text-slate-800 mb-1">シフトを上書きしますか？</h3>
+        <p className="text-sm text-slate-500 mb-4">{message}</p>
+        <div className="flex gap-2">
+          <button onClick={onConfirm} className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            上書きしてコピー
+          </button>
+          <button onClick={onCancel} className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
+            キャンセル
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ShiftsPage() {
   const { user } = useAuth();
   const now = new Date();
@@ -37,10 +56,12 @@ export default function ShiftsPage() {
   const [closeDate, setCloseDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitDone, setSubmitDone] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const [popup, setPopup] = useState<{ date: string; day: Date } | null>(null);
   const [showDraftAlert, setShowDraftAlert] = useState(false);
   const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
+  const [editError, setEditError] = useState('');
   useBodyScrollLock(popup !== null || showDraftAlert || showSubmitPrompt);
 
   // ①：起動時に未提出の下書きがあればアラートを表示
@@ -159,6 +180,7 @@ export default function ShiftsPage() {
 
   const openPopup = (date: string, day: Date) => {
     setEditShift({ ...(shifts[date] ?? defaultDay()) });
+    setEditError('');
     setPopup({ date, day });
     setSubmitDone(false);
   };
@@ -167,6 +189,11 @@ export default function ShiftsPage() {
 
   const applyEdit = () => {
     if (!popup) return;
+    setEditError('');
+    if (editShift.shiftType && editShift.shiftType !== 'off' && editShift.startTime >= editShift.endTime) {
+      setEditError('終了時刻は開始時刻より後にしてください');
+      return;
+    }
     const newShifts = { ...shifts, [popup.date]: { ...editShift, dirty: true } };
     setShifts(newShifts);
     setPopup(null);
@@ -218,44 +245,54 @@ export default function ShiftsPage() {
   const handleSubmitAll = async () => {
     if (!user || isLocked) return;
     setSubmitting(true);
+    setSubmitError('');
 
-    const entries = Object.entries(shifts).filter(([, s]) => s.dirty);
+    try {
+      const entries = Object.entries(shifts).filter(([, s]) => s.dirty);
 
-    // 「休み」に変更されたものを削除
-    const toDelete = entries.filter(([, s]) => !s.shiftType && s.existingId);
-    await Promise.all(toDelete.map(([, s]) => supabase.from('shifts').delete().eq('id', s.existingId!)));
-
-    // シフトがあるものは upsert（INSERT or UPDATE を自動判定）
-    const toUpsert = entries
-      .filter(([, s]) => s.shiftType)
-      .map(([date, s]) => ({
-        user_id: user.id,
-        date,
-        shift_type: s.shiftType!,
-        start_time: s.shiftType === 'off' ? '00:00' : s.startTime,
-        end_time: s.shiftType === 'off' ? '00:00' : s.endTime,
-        comment: s.comment,
-        status: 'draft' as const,
-      }));
-
-    if (toUpsert.length > 0) {
-      const { error } = await supabase
-        .from('shifts')
-        .upsert(toUpsert, { onConflict: 'user_id,date' });
-      if (error) {
-        console.error('upsert error:', error);
-        setSubmitting(false);
+      // 「休み」に変更されたものを削除
+      const toDelete = entries.filter(([, s]) => !s.shiftType && s.existingId);
+      const deleteResults = await Promise.all(toDelete.map(([, s]) => supabase.from('shifts').delete().eq('id', s.existingId!)));
+      const deleteError = deleteResults.find(r => r.error)?.error;
+      if (deleteError) {
+        setSubmitError(`削除に失敗しました: ${deleteError.message}`);
         return;
       }
-    }
 
-    // 提出成功 → localStorage の下書きを削除してからDB再取得
-    localStorage.removeItem(`shift_draft_${user.id}_${formatYM(year, month)}`);
-    window.dispatchEvent(new Event('storage'));
-    await loadShifts();
-    setSubmitting(false);
-    setSubmitDone(true);
-    setTimeout(() => setSubmitDone(false), 3000);
+      // シフトがあるものは upsert（INSERT or UPDATE を自動判定）
+      const toUpsert = entries
+        .filter(([, s]) => s.shiftType)
+        .map(([date, s]) => ({
+          user_id: user.id,
+          date,
+          shift_type: s.shiftType!,
+          start_time: s.shiftType === 'off' ? '00:00' : s.startTime,
+          end_time: s.shiftType === 'off' ? '00:00' : s.endTime,
+          comment: s.comment,
+          status: 'draft' as const,
+        }));
+
+      if (toUpsert.length > 0) {
+        const { error } = await supabase
+          .from('shifts')
+          .upsert(toUpsert, { onConflict: 'user_id,date' });
+        if (error) {
+          setSubmitError(`提出に失敗しました: ${error.message}`);
+          return;
+        }
+      }
+
+      // 提出成功 → localStorage の下書きを削除してからDB再取得
+      localStorage.removeItem(`shift_draft_${user.id}_${formatYM(year, month)}`);
+      window.dispatchEvent(new Event('storage'));
+      await loadShifts();
+      setSubmitDone(true);
+      setTimeout(() => setSubmitDone(false), 3000);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? `提出に失敗しました: ${e.message}` : '提出に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // コピーモード
@@ -275,7 +312,12 @@ export default function ShiftsPage() {
     });
   };
 
-  const applyCopy = () => {
+  const [copyOverwriteConfirm, setCopyOverwriteConfirm] = useState(false);
+
+  // 上書き対象の日にすでに入力済み/未提出のデータがあるか
+  const hasExistingData = (key: string) => !!(shifts[key]?.shiftType || shifts[key]?.dirty);
+
+  const doApplyCopy = () => {
     if (!copyingShift) return;
     setShifts(prev => {
       const next = { ...prev };
@@ -284,22 +326,35 @@ export default function ShiftsPage() {
     });
     setCopyingShift(null);
     setCopyTargets(new Set());
+    setCopyOverwriteConfirm(false);
   };
 
-  const cancelCopy = () => { setCopyingShift(null); setCopyTargets(new Set()); };
+  const applyCopy = () => {
+    if (!copyingShift) return;
+    const willOverwrite = Array.from(copyTargets).some(hasExistingData);
+    if (willOverwrite) { setCopyOverwriteConfirm(true); return; }
+    doApplyCopy();
+  };
+
+  const cancelCopy = () => { setCopyingShift(null); setCopyTargets(new Set()); setCopyOverwriteConfirm(false); };
 
   const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const [copyPrevPending, setCopyPrevPending] = useState<Record<string, DayShift> | null>(null);
+
   const copyFromPrevMonth = async () => {
     if (!user || copying) return;
     setCopying(true);
+    setCopyError('');
     const [prevY, prevM] = month === 0 ? [year - 1, 11] : [year, month - 1];
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('shifts').select('*').eq('user_id', user.id)
       .gte('date', monthStart(prevY, prevM)).lte('date', monthEnd(prevY, prevM));
     setCopying(false);
-    if (!data || data.length === 0) { alert('前月のシフトデータがありません'); return; }
+    if (error) { setCopyError('前月のシフトデータの取得に失敗しました'); return; }
+    if (!data || data.length === 0) { setCopyError('前月のシフトデータがありません'); return; }
     const currentDays = getDaysInMonth(year, month);
-    const next = { ...shifts };
+    const changes: Record<string, DayShift> = {};
     for (const s of data) {
       const prevDate = new Date(s.date + 'T00:00:00');
       const weekday = prevDate.getDay();
@@ -309,18 +364,32 @@ export default function ShiftsPage() {
         if (d.getDay() === weekday) {
           if (count === occurrence) {
             const key = formatDate(d);
-            next[key] = {
-              shiftType: s.shift_type, startTime: s.start_time, endTime: s.end_time,
-              comment: s.comment ?? '', dirty: true,
-              existingId: next[key]?.existingId, status: next[key]?.status,
-            };
+            // 確定済みのシフトは上書きしない（変更が必要な場合は調整依頼を利用）
+            if (shifts[key]?.status !== 'confirmed') {
+              changes[key] = {
+                shiftType: s.shift_type, startTime: s.start_time, endTime: s.end_time,
+                comment: s.comment ?? '', dirty: true,
+                existingId: shifts[key]?.existingId, status: shifts[key]?.status,
+              };
+            }
             break;
           }
           count++;
         }
       }
     }
-    setShifts(next);
+    const willOverwrite = Object.keys(changes).some(hasExistingData);
+    if (willOverwrite) {
+      setCopyPrevPending(changes);
+    } else {
+      setShifts(prev => ({ ...prev, ...changes }));
+    }
+  };
+
+  const applyCopyFromPrevMonth = () => {
+    if (!copyPrevPending) return;
+    setShifts(prev => ({ ...prev, ...copyPrevPending }));
+    setCopyPrevPending(null);
   };
 
   return (
@@ -381,6 +450,12 @@ export default function ShiftsPage() {
         </div>
       )}
 
+      {copyError && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
+          {copyError}
+        </div>
+      )}
+
       {/* 月間サマリー */}
       {hasSummary && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3 mb-4 grid grid-cols-3 divide-x divide-slate-100">
@@ -429,7 +504,8 @@ export default function ShiftsPage() {
           const isRed = dow === 0;
           const isBlue = dow === 6;
           const isToday = key === formatDate(new Date());
-          const rowTappable = !copyingShift && !isLocked;
+          const isConfirmed = !s.dirty && s.status === 'confirmed';
+          const rowTappable = !copyingShift && !isLocked && !isConfirmed;
           const bgClass = isRed ? 'bg-rose-50/40' : isBlue ? 'bg-sky-50/40' : 'bg-white';
           const borderClass = s.dirty ? 'border-blue-300' : isToday ? 'border-blue-200' : 'border-slate-200';
 
@@ -462,8 +538,8 @@ export default function ShiftsPage() {
                 {s.comment && <p className="text-xs text-slate-400 mt-0.5 truncate">{s.comment}</p>}
               </div>
 
-              {/* コピーモード：選択トグル */}
-              {copyingShift && (
+              {/* コピーモード：選択トグル（確定済みの日はコピー先にできない） */}
+              {copyingShift && !isConfirmed && (
                 <button
                   onClick={() => toggleCopyTarget(key)}
                   className={`flex-shrink-0 w-9 h-9 rounded-lg border-2 flex items-center justify-center text-sm transition-colors ${
@@ -475,7 +551,7 @@ export default function ShiftsPage() {
               )}
 
               {/* 通常モード：入力 + コピーボタン */}
-              {!copyingShift && !isLocked && (
+              {!copyingShift && !isLocked && !isConfirmed && (
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {s.shiftType && (
                     <button
@@ -519,6 +595,7 @@ export default function ShiftsPage() {
       {/* まとめて提出ボタン（固定フッター、期間外・コピーモードは非表示） */}
       {!isLocked && !copyingShift && (
         <div className="fixed bottom-14 sm:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur border-t border-slate-200">
+          {submitError && <p className="text-red-600 text-xs text-center mb-2">{submitError}</p>}
           <button
             onClick={handleSubmitAll}
             disabled={dirtyCount === 0 || submitting}
@@ -693,6 +770,8 @@ export default function ShiftsPage() {
               className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-300"
             />
 
+            {editError && <p className="text-red-500 text-sm mb-2 text-center">{editError}</p>}
+
             {/* 決定 */}
             <button
               onClick={applyEdit}
@@ -702,6 +781,24 @@ export default function ShiftsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 前月コピー：上書き確認 */}
+      {copyPrevPending && (
+        <OverwriteConfirmModal
+          message={`入力済み・提出済みのシフトが${Object.keys(copyPrevPending).length}日分、前月のシフトで上書きされます。`}
+          onConfirm={applyCopyFromPrevMonth}
+          onCancel={() => setCopyPrevPending(null)}
+        />
+      )}
+
+      {/* コピー先選択：上書き確認 */}
+      {copyOverwriteConfirm && (
+        <OverwriteConfirmModal
+          message="選択した日の一部にはすでに入力済みのシフトがあります。コピー内容で上書きされます。"
+          onConfirm={doApplyCopy}
+          onCancel={() => setCopyOverwriteConfirm(false)}
+        />
       )}
     </div>
   );

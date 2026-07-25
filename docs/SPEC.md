@@ -9,7 +9,7 @@
 | 項目 | 内容 |
 |---|---|
 | フレームワーク | Next.js 16.2 (App Router) |
-| 言語 | TypeScript 6 |
+| 言語 | TypeScript 5 |
 | スタイリング | Tailwind CSS 4 |
 | DB / BaaS | Supabase (PostgreSQL + Realtime) |
 | デプロイ | Vercel |
@@ -23,11 +23,15 @@
 |---|---|---|
 | id | uuid | PK |
 | name | text | 表示名（ユニーク） |
-| role | text | `admin` or `staff` |
-| pin | text | 平文PIN（4桁）※表示用 |
-| pin_hash | text | SHA-256ハッシュ |
+| role | text | `admin` or `staff`（`developer`はDBに保存されずクライアント限定の合成ロール） |
+| pin_hash | text | bcryptハッシュ（2026-07-25以降。平文pin列は廃止済み） |
+| failed_pin_attempts | integer | ログイン失敗回数（5回でロック） |
+| pin_locked_until | timestamptz | ロック解除時刻 |
 | display_order | integer | スタッフ一覧の表示順 |
 | created_at | timestamptz | 登録日時 |
+
+> anon/authenticated ロールは `id, name, role, display_order, created_at` のみSELECT可能（列単位権限）。
+> pin_hash等の検証・更新は `verify_login` / `admin_set_pin` のSECURITY DEFINER RPC経由に限定。詳細は `docs/SECURITY.md`。
 
 ### `shifts` テーブル
 | カラム | 型 | 説明 |

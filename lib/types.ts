@@ -5,7 +5,6 @@ export interface User {
   name: string;
   role: UserRole;
   created_at: string;
-  pin?: string;
   display_order?: number;
 }
 

@@ -1,21 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { hashPin } from '@/lib/shifts';
 import type { User, UserRole } from '@/lib/types';
-
-function PinCell({ pin }: { pin?: string }) {
-  const [visible, setVisible] = useState(false);
-  if (!pin) return <span className="text-slate-300 text-xs">—</span>;
-  return (
-    <button
-      onClick={() => setVisible(v => !v)}
-      className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 tracking-widest select-all"
-    >
-      {visible ? pin : '••••'}
-    </button>
-  );
-}
 
 export default function AdminStaffPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -42,7 +28,7 @@ export default function AdminStaffPage() {
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
 
   const loadUsers = async () => {
-    const { data } = await supabase.from('users').select('id, name, role, pin, display_order, created_at').order('display_order', { ascending: true, nullsFirst: false });
+    const { data } = await supabase.from('users').select('id, name, role, display_order, created_at').order('display_order', { ascending: true, nullsFirst: false });
     setUsers((data ?? []).filter((u: User) => u.role !== 'developer'));
   };
 
@@ -55,11 +41,20 @@ export default function AdminStaffPage() {
     if (!/^\d{4}$/.test(addPin)) return setAddError('PINは数字4桁で入力してください');
     if (addPin !== addPinConfirm) return setAddError('PINが一致しません');
     setAddSaving(true);
-    const pin_hash = await hashPin(addPin);
     const maxOrder = users.reduce((m, u) => Math.max(m, u.display_order ?? 0), 0);
-    const { error } = await supabase.from('users').insert({ name: addName.trim(), pin_hash, pin: addPin, role: addRole, display_order: maxOrder + 1 });
+    const { data, error } = await supabase
+      .from('users')
+      .insert({ name: addName.trim(), role: addRole, display_order: maxOrder + 1 })
+      .select('id')
+      .single();
+    if (error || !data) {
+      setAddSaving(false);
+      setAddError(error?.message.includes('unique') ? 'この名前は既に登録されています' : (error?.message ?? '追加に失敗しました'));
+      return;
+    }
+    const { error: pinError } = await supabase.rpc('admin_set_pin', { p_user_id: data.id, p_new_pin: addPin });
     setAddSaving(false);
-    if (error) { setAddError(error.message.includes('unique') ? 'この名前は既に登録されています' : error.message); return; }
+    if (pinError) { setAddError(`PINの設定に失敗しました: ${pinError.message}`); return; }
     setAddName(''); setAddPin(''); setAddPinConfirm(''); setAddRole('staff');
     setShowAddForm(false);
     loadUsers();
@@ -83,11 +78,16 @@ export default function AdminStaffPage() {
     if (editPin && !/^\d{4}$/.test(editPin)) return setEditError('PINは数字4桁で入力してください');
     if (editPin && editPin !== editPinConfirm) return setEditError('PINが一致しません');
     setEditSaving(true);
-    const patch: Record<string, string> = { name: editName.trim(), role: editRole };
-    if (editPin) { patch.pin_hash = await hashPin(editPin); patch.pin = editPin; }
-    const { error } = await supabase.from('users').update(patch).eq('id', editTarget.id);
+    const { error } = await supabase
+      .from('users')
+      .update({ name: editName.trim(), role: editRole })
+      .eq('id', editTarget.id);
+    if (error) { setEditSaving(false); setEditError(error.message); return; }
+    if (editPin) {
+      const { error: pinError } = await supabase.rpc('admin_set_pin', { p_user_id: editTarget.id, p_new_pin: editPin });
+      if (pinError) { setEditSaving(false); setEditError(`PINの設定に失敗しました: ${pinError.message}`); return; }
+    }
     setEditSaving(false);
-    if (error) { setEditError(error.message); return; }
     setEditTarget(null);
     loadUsers();
   };
@@ -178,7 +178,6 @@ export default function AdminStaffPage() {
                 <th className="px-2 py-3 w-10" />
                 <th className="text-left px-5 py-3 font-semibold text-slate-600">名前</th>
                 <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">権限</th>
-                <th className="text-left px-5 py-3 font-semibold text-slate-600 whitespace-nowrap">PIN</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
@@ -211,9 +210,6 @@ export default function AdminStaffPage() {
                     <span className={`inline-block text-[10px] px-1.5 py-px rounded font-medium border whitespace-nowrap ${u.role === 'admin' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                       {u.role === 'admin' ? '管理者' : 'スタッフ'}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <PinCell pin={u.pin} />
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openEdit(u)}
