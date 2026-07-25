@@ -41,20 +41,14 @@ export default function AdminStaffPage() {
     if (!/^\d{4}$/.test(addPin)) return setAddError('PINは数字4桁で入力してください');
     if (addPin !== addPinConfirm) return setAddError('PINが一致しません');
     setAddSaving(true);
-    const maxOrder = users.reduce((m, u) => Math.max(m, u.display_order ?? 0), 0);
-    const { data, error } = await supabase
-      .from('users')
-      .insert({ name: addName.trim(), role: addRole, display_order: maxOrder + 1 })
-      .select('id')
-      .single();
-    if (error || !data) {
-      setAddSaving(false);
-      setAddError(error?.message.includes('unique') ? 'この名前は既に登録されています' : (error?.message ?? '追加に失敗しました'));
-      return;
-    }
-    const { error: pinError } = await supabase.rpc('admin_set_pin', { p_user_id: data.id, p_new_pin: addPin });
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: addName.trim(), role: addRole, pin: addPin }),
+    });
+    const body = await res.json().catch(() => ({}));
     setAddSaving(false);
-    if (pinError) { setAddError(`PINの設定に失敗しました: ${pinError.message}`); return; }
+    if (!res.ok) { setAddError(body.error ?? '追加に失敗しました'); return; }
     setAddName(''); setAddPin(''); setAddPinConfirm(''); setAddRole('staff');
     setShowAddForm(false);
     loadUsers();
@@ -78,38 +72,59 @@ export default function AdminStaffPage() {
     if (editPin && !/^\d{4}$/.test(editPin)) return setEditError('PINは数字4桁で入力してください');
     if (editPin && editPin !== editPinConfirm) return setEditError('PINが一致しません');
     setEditSaving(true);
-    const { error } = await supabase
-      .from('users')
-      .update({ name: editName.trim(), role: editRole })
-      .eq('id', editTarget.id);
-    if (error) { setEditSaving(false); setEditError(error.message); return; }
-    if (editPin) {
-      const { error: pinError } = await supabase.rpc('admin_set_pin', { p_user_id: editTarget.id, p_new_pin: editPin });
-      if (pinError) { setEditSaving(false); setEditError(`PINの設定に失敗しました: ${pinError.message}`); return; }
-    }
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editTarget.id, name: editName.trim(), role: editRole, pin: editPin || undefined }),
+    });
+    const body = await res.json().catch(() => ({}));
     setEditSaving(false);
+    if (!res.ok) { setEditError(body.error ?? '保存に失敗しました'); return; }
+    const savedId = editTarget.id;
+    const savedName = editName.trim();
+    const savedRole = editRole;
+    setUsers(prev => prev.map(u => u.id === savedId ? { ...u, name: savedName, role: savedRole } : u));
     setEditTarget(null);
-    loadUsers();
   };
 
   // 削除
+  const [deleteError, setDeleteError] = useState('');
   const handleDelete = async (u: User) => {
-    await supabase.from('users').delete().eq('id', u.id);
+    setDeleteError('');
+    const res = await fetch('/api/admin/users', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setDeleteError(body.error ?? '削除に失敗しました');
+      return;
+    }
+    setUsers(prev => prev.filter(existing => existing.id !== u.id));
     setDeleteTarget(null);
-    loadUsers();
   };
 
   // 並び替え
-  const moveUser = (idx: number, dir: 'up' | 'down') => {
+  const [reorderError, setReorderError] = useState('');
+  const moveUser = async (idx: number, dir: 'up' | 'down') => {
     const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= users.length) return;
     const next = [...users];
     [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
     const withOrder = next.map((u, i) => ({ ...u, display_order: i + 1 }));
     setUsers(withOrder);
-    Promise.all(withOrder.map(u =>
-      supabase.from('users').update({ display_order: u.display_order }).eq('id', u.id)
-    ));
+    setReorderError('');
+    const res = await fetch('/api/admin/users/reorder', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: withOrder.map(u => ({ id: u.id, display_order: u.display_order })) }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setReorderError(body.error ?? '並び替えに失敗しました');
+      loadUsers();
+    }
   };
 
   return (
@@ -121,6 +136,12 @@ export default function AdminStaffPage() {
           + スタッフを追加
         </button>
       </div>
+
+      {reorderError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm text-center">
+          {reorderError}
+        </div>
+      )}
 
       {/* 追加フォーム */}
       {showAddForm && (
@@ -216,7 +237,7 @@ export default function AdminStaffPage() {
                       className="text-xs px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-1">
                       編集
                     </button>
-                    <button onClick={() => setDeleteTarget(u)}
+                    <button onClick={() => { setDeleteError(''); setDeleteTarget(u); }}
                       className="text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                       削除
                     </button>
@@ -285,6 +306,7 @@ export default function AdminStaffPage() {
             <p className="text-slate-600 text-sm mb-6">
               <span className="font-semibold">{deleteTarget.name}</span> を削除します。このスタッフのシフトデータも削除されます。
             </p>
+            {deleteError && <p className="text-red-500 text-sm mb-3">{deleteError}</p>}
             <div className="flex gap-2">
               <button onClick={() => handleDelete(deleteTarget)}
                 className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700">

@@ -1,0 +1,31 @@
+-- ============================================================
+-- Tier 2 仕上げ（2026-07-25c）: users テーブルへの直接書込みを anon から剥奪
+--
+-- 前提: このマイグレーションは、以下がすべて完了してから適用すること。
+--   1. アプリに SESSION_SECRET / SUPABASE_SERVICE_ROLE_KEY を設定済み
+--   2. app/api/login, app/api/dev-login, app/api/admin/users,
+--      app/api/admin/users/reorder をデプロイ済み
+--   3. スタッフ管理画面（追加・編集・削除・並び替え）が新しいAPI経由で
+--      正常に動作することを確認済み
+--
+-- これを適用すると、anon/authenticated からの users への
+-- INSERT/UPDATE/DELETE は一切拒否されるようになる（SELECTは列単位権限のまま）。
+-- 以後、スタッフ情報の変更はすべて service_role キーを使う
+-- app/api/admin/users 系のRoute Handler経由でのみ可能になる。
+--
+-- 重要: admin_set_pin RPC は呼び出し元の権限チェックを一切行わず、
+-- 指定された user_id のPINを無条件で書き換えられる。usersテーブルの
+-- 直接書込みを塞いでも、この関数の実行権限を anon/authenticated に
+-- 残したままだと「anon_set_pin を直接呼んで他人（管理者含む）のPINを
+-- 書き換え→そのPINでログインしてセッションを奪う」という同等の抜け道が
+-- 残ってしまう。そのため実行権限も同時に剥奪する。
+-- （service_role クライアントは GRANT/REVOKE を無視して常に実行できるため、
+-- app/api/admin/users からの呼び出しには影響しない）
+--
+-- 注意: 適用前にこの手順を飛ばして適用すると、スタッフ管理画面の
+-- 追加・編集・削除・並び替えが一切機能しなくなる（クライアントから直接
+-- supabase.from('users') を書き込む古いコードが残っている場合）。
+-- ============================================================
+
+revoke insert, update, delete on public.users from anon, authenticated;
+revoke execute on function public.admin_set_pin(uuid, text) from anon, authenticated;

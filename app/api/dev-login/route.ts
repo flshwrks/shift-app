@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
+import { buildSessionCookieValue, constantTimeEqual, SESSION_COOKIE } from '@/lib/session';
 
 // 開発者ログインのパスワード検証。以前はクライアント側コード('0805'固定文字列)に
 // 直書きされ、ビルド後のJSバンドルを見れば誰でも読み取れる状態だった。
@@ -14,12 +14,18 @@ export async function POST(request: Request) {
   const { code } = await request.json().catch(() => ({ code: '' }));
   const input = typeof code === 'string' ? code : '';
 
-  const inputBuf = Buffer.from(input);
-  const secretBuf = Buffer.from(secret);
-  const match = inputBuf.length === secretBuf.length && timingSafeEqual(inputBuf, secretBuf);
-
-  if (!match) {
+  if (!constantTimeEqual(input, secret)) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
-  return NextResponse.json({ ok: true });
+
+  const user = { id: '__dev__', name: '開発者', role: 'developer' as const };
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(SESSION_COOKIE.name, buildSessionCookieValue(user), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: SESSION_COOKIE.maxAge,
+  });
+  return res;
 }

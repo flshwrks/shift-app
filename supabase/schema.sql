@@ -67,6 +67,10 @@ create policy "allow_all_settings" on public.app_settings for all using (true) w
 revoke select on public.users from anon, authenticated;
 grant select (id, name, role, display_order, created_at) on public.users to anon, authenticated;
 
+-- users への書込み(追加・編集・削除・並び替え)は、SESSION_SECRET/SUPABASE_SERVICE_ROLE_KEY
+-- を使う app/api/admin/users 系のRoute Handler経由に限定する（詳細は docs/SECURITY.md）
+revoke insert, update, delete on public.users from anon, authenticated;
+
 -- PIN検証RPC（bcrypt比較 + 失敗ロックアウト。詳細は migrations/2026-07-25_security_hardening.sql）
 create or replace function public.verify_login(p_user_id uuid, p_pin text)
 returns table(id uuid, name text, role text)
@@ -116,7 +120,10 @@ begin
 end;
 $$;
 
-grant execute on function public.admin_set_pin(uuid, text) to anon, authenticated;
+-- admin_set_pin は呼び出し元の権限チェックをしないため、anon/authenticated には
+-- 実行権限を与えない（service_role クライアントは grant/revoke を無視して常に実行できる。
+-- app/api/admin/users 系のRoute Handlerからのみ呼び出す設計）
+revoke execute on function public.admin_set_pin(uuid, text) from anon, authenticated, public;
 
 -- リアルタイム設定
 alter publication supabase_realtime add table public.shifts;

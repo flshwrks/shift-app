@@ -106,6 +106,7 @@ export default function NavBar() {
 
   const handleLogout = () => {
     if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
+    fetch('/api/logout', { method: 'POST' }).catch(() => {});
     logout();
     router.replace('/login');
   };

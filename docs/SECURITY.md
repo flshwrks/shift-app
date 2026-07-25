@@ -23,28 +23,30 @@
 - `lib/types.ts` / `lib/shifts.ts`: 不要になった `pin` 型フィールドと `hashPin`（旧SHA-256実装）を削除
 - Vercel本番環境に `DEV_LOGIN_PASSWORD` を設定済み（値は従来と同じ `0805`。開発者の操作フローは変わらない）
 
-## ⚠️ 適用が必要な作業（あなたご自身での対応が必須）
+## ✅ Tier 1 の適用状況（完了）
 
-このセッションには本番Supabaseの管理者権限（service_role キーやCLI連携）がないため、以下はコードの用意はできてもDBへの適用ができません。
+`supabase/migrations/2026-07-25_security_hardening.sql` と、pgcryptoのsearch_path問題を修正した追加パッチ `2026-07-25b_fix_pgcrypto_search_path.sql` は、ユーザー自身がSupabase SQL Editorで実行済み。`verify_login` RPC・列単位権限をAPI経由で疎通確認済み。コード側もpush・本番デプロイ済み。
 
-1. **Supabaseダッシュボード → SQL Editor** で `supabase/migrations/2026-07-25_security_hardening.sql` の内容を実行してください。
-2. **適用順序が重要**: このSQLを実行してから、対応するアプリケーションコードをデプロイしてください。逆順（コード先・SQL後）だとログイン自体が機能しなくなります。今回はこのコード変更をローカルにコミットのみ行い、**pushはまだしていません**。SQL適用後に教えてください。
-3. SQL適用後、ログイン画面（通常ログイン・開発者ログイン両方）が正常に動作するか、テストアカウントで確認してください。
+## 対応した内容（Tier 2 — usersテーブル書込みのAPI移行）
 
-## 残存リスク（Tier 2・未対応。今後の推奨事項）
+Tier 1適用直後は、`users` への INSERT/UPDATE/DELETE が anon に開放されたままで、「`role` を直接 `admin` に書き換える」「新規に `role='admin'` 行を直接INSERTする」といった攻撃が理論上可能な状態だった。以下でこれを塞いだ。
 
-`users` テーブルへの **INSERT/UPDATE/DELETE は今回も anon に開放されたまま**です。スタッフ管理画面（追加・編集・削除・権限変更・PINリセット）がこの権限に依存しており、これを塞ぐには「誰が管理者としてリクエストしているか」をサーバー側で検証する仕組み（Supabase Authや署名付きセッションCookieなど）が必要ですが、今回のセッションにはSupabaseの認証基盤を導入する時間的余裕・DB権限がありませんでした。
+- `lib/session.ts`: httpOnly署名付きセッションCookie（HMAC-SHA256、`SESSION_SECRET`）を新設。`getSession()` / `requireAdmin()` で検証
+- `app/api/login/route.ts`（新規）: PIN検証（`verify_login` RPC）に成功したらセッションCookieを発行
+- `app/api/logout/route.ts`（新規）: Cookie削除
+- `app/api/dev-login/route.ts`: 開発者ログイン成功時もセッションCookieを発行するよう変更
+- `lib/supabaseAdmin.ts`（新規）: `SUPABASE_SERVICE_ROLE_KEY` を使いRLSを完全にバイパスする管理者専用クライアント（サーバー限定）
+- `app/api/admin/users/route.ts`, `app/api/admin/users/reorder/route.ts`（新規）: スタッフの追加・編集・削除・並び替えをここに集約。`requireAdmin()` でrole=admin/developerのセッションを検証してからservice roleクライアントで書込む
+- `app/admin/staff/page.tsx`: 直接Supabase書込みをやめ、上記APIを`fetch`で呼ぶように変更
+- `supabase/migrations/2026-07-25c_lock_users_writes.sql`（**要手動適用**、後述）: `users` への INSERT/UPDATE/DELETE と `admin_set_pin` RPCの実行権限を anon/authenticated から剥奪する仕上げ
 
-現状でも起こりうる攻撃（要: `public_users` 相当の一覧から取得できるUUID）:
-- 既存ユーザーの `role` を直接 `admin` に書き換える
-- bcryptハッシュを自分で用意した新規ユーザー行を `role='admin'` で直接INSERTする
+**重要な追加発見**: `/simplify` の並列レビュー（altitude観点）で、`admin_set_pin` RPCが呼び出し元の権限チェックを一切行わず、しかも `anon` に実行権限が付与されたままだったことが判明。usersテーブルの直接書込みだけ塞いでも、このRPCを直接叩けば「他人（管理者含む）のPINを書き換え→そのPINでログインしてセッション奪取」という同等の抜け道が残る状態だった。ロックダウン用マイグレーションに `revoke execute on function public.admin_set_pin(uuid, text) from anon, authenticated;` を追加して対応（service_roleクライアントはgrant/revokeを無視して常に実行できるため、新しいAPIルートには影響しない）。
 
-**推奨する次のステップ（Tier 2）**:
-1. `SUPABASE_SERVICE_ROLE_KEY` を取得し、Vercelのサーバー専用環境変数として設定
-2. ログインAPI（`/api/login` 等）でPIN検証成功時にhttpOnly署名付きセッションCookieを発行
-3. `users` テーブルへの書込み（追加・編集・削除・PINリセット・権限変更）を `/api/admin/users` のようなNext.js Route Handlerに移し、Cookieのroleを検証した上でservice roleクライアントを使う
-4. その後 `revoke insert, update, delete on public.users from anon, authenticated;` を適用し、書込みをAPI経由のみに限定する
-5. 同様のパターンを `shifts`（確定操作）・`shift_requests`（取消・確定）・`app_settings`（提出期間・組織名）にも順次拡大することが望ましい（現状はこれらも行レベルで全開放だが、`users` ほど致命的ではないため今回は優先度を下げた）
+ローカルで実際にビルド済みアプリを起動し、本番のSupabaseプロジェクトに対して以下を確認済み: スタッフ作成→発行PINでのログイン→編集（名前・権限・PIN変更の並列更新）→新PINでのログイン→削除、権限チェック（未ログイン・スタッフ権限それぞれ403）、並び替え（不正なリクエストは全体を拒否、正常なリクエストは対象行のみ更新され他の列は無傷）。テスト用に作成したデータはすべて削除し、実データへの影響なし。
+
+**⚠️ 追加で適用が必要な作業**: `supabase/migrations/2026-07-25c_lock_users_writes.sql` を、新しいAPIルートのデプロイ後に（=このコードが本番で動作することを確認してから）Supabase SQL Editorで実行してください。この最後の一手が完了して初めて、usersテーブルへの直接書込みが完全に閉じます。
+
+**残存リスク（今後の課題）**: 同様のパターンを `shifts`（確定操作）・`shift_requests`（取消・確定）・`app_settings`（提出期間・組織名）にも拡大することが望ましい（現状はこれらも行レベルで全開放だが、`users` ほど致命的ではないため優先度を下げている）。
 
 ## その他の監査結果（機能・UX・保守性）
 

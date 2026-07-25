@@ -72,14 +72,17 @@ export default function LoginPage() {
     if (!selected) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .rpc('verify_login', { p_user_id: selected.id, p_pin: enteredPin })
-        .maybeSingle<{ id: string; name: string; role: User['role'] }>();
-      if (data) {
-        login({ id: data.id, name: data.name, role: data.role });
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selected.id, pin: enteredPin }),
+      });
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (res.ok && body.ok) {
+        login({ id: body.user.id, name: body.user.name, role: body.user.role });
       } else {
         setIsShaking(true);
-        setError(error ? 'しばらくしてから再度お試しください' : 'PINコードが違います');
+        setError(res.status === 429 ? 'しばらくしてから再度お試しください' : 'PINコードが違います');
         setPin('');
         setTimeout(() => setIsShaking(false), 400);
       }
