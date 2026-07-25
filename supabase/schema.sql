@@ -72,7 +72,7 @@ create or replace function public.verify_login(p_user_id uuid, p_pin text)
 returns table(id uuid, name text, role text)
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_user public.users%rowtype;
@@ -104,7 +104,7 @@ create or replace function public.admin_set_pin(p_user_id uuid, p_new_pin text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if p_new_pin !~ '^\d{4}$' then
