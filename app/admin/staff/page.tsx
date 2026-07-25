@@ -115,27 +115,27 @@ export default function AdminStaffPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-slate-800">スタッフ管理</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900">スタッフ管理</h2>
         <button onClick={() => { setShowAddForm(true); setAddError(''); }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700">
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
           + スタッフを追加
         </button>
       </div>
 
       {/* 追加フォーム */}
       {showAddForm && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5 mb-6">
           <h3 className="font-semibold text-slate-700 mb-4">新しいスタッフ</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">名前 *</label>
               <input type="text" value={addName} onChange={e => setAddName(e.target.value)} placeholder="山田 太郎"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">権限</label>
               <select value={addRole} onChange={e => setAddRole(e.target.value as UserRole)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
                 <option value="staff">スタッフ</option>
                 <option value="admin">管理者</option>
               </select>
@@ -144,23 +144,23 @@ export default function AdminStaffPage() {
               <label className="block text-xs font-medium text-slate-500 mb-1">PIN (4桁) *</label>
               <input type="password" inputMode="numeric" maxLength={4} value={addPin}
                 onChange={e => setAddPin(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="0000"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">PIN 確認 *</label>
               <input type="password" inputMode="numeric" maxLength={4} value={addPinConfirm}
                 onChange={e => setAddPinConfirm(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="0000"
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
           </div>
           {addError && <p className="text-red-500 text-sm mt-3">{addError}</p>}
           <div className="flex gap-2 mt-4">
             <button onClick={handleAdd} disabled={addSaving}
-              className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50">
+              className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {addSaving ? '追加中…' : '追加'}
             </button>
             <button onClick={() => { setShowAddForm(false); setAddError(''); }}
-              className="px-5 py-2 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200">
+              className="px-5 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
               キャンセル
             </button>
           </div>
@@ -168,7 +168,7 @@ export default function AdminStaffPage() {
       )}
 
       {/* スタッフ一覧 */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] overflow-x-auto">
         {users.length === 0 ? (
           <p className="text-center text-slate-400 py-12 text-sm">スタッフが登録されていません</p>
         ) : (
@@ -208,7 +208,7 @@ export default function AdminStaffPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${u.role === 'admin' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                    <span className={`inline-block text-[10px] px-1.5 py-px rounded font-medium border whitespace-nowrap ${u.role === 'admin' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                       {u.role === 'admin' ? '管理者' : 'スタッフ'}
                     </span>
                   </td>
@@ -236,17 +236,17 @@ export default function AdminStaffPage() {
       {editTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">{editTarget.name} を編集</h3>
+            <h3 className="text-lg font-semibold tracking-tight text-slate-900 mb-4">{editTarget.name} を編集</h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">名前</label>
                 <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">権限</label>
                 <select value={editRole} onChange={e => setEditRole(e.target.value as UserRole)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
                   <option value="staff">スタッフ</option>
                   <option value="admin">管理者</option>
                 </select>
@@ -255,25 +255,25 @@ export default function AdminStaffPage() {
                 <label className="block text-xs font-medium text-slate-500 mb-1">新しいPIN（変更する場合のみ）</label>
                 <input type="password" inputMode="numeric" maxLength={4} value={editPin}
                   onChange={e => setEditPin(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="4桁の数字"
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
               </div>
               {editPin && (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">PIN 確認</label>
                   <input type="password" inputMode="numeric" maxLength={4} value={editPinConfirm}
                     onChange={e => setEditPinConfirm(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="4桁の数字"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
                 </div>
               )}
             </div>
             {editError && <p className="text-red-500 text-sm mt-3">{editError}</p>}
             <div className="flex gap-2 mt-5">
               <button onClick={handleEdit} disabled={editSaving}
-                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50">
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {editSaving ? '保存中…' : '保存'}
               </button>
               <button onClick={() => setEditTarget(null)}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200">
+                className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
                 キャンセル
               </button>
             </div>
@@ -285,17 +285,17 @@ export default function AdminStaffPage() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-bold text-slate-800 mb-2">スタッフを削除</h3>
+            <h3 className="text-lg font-semibold tracking-tight text-slate-900 mb-2">スタッフを削除</h3>
             <p className="text-slate-600 text-sm mb-6">
               <span className="font-semibold">{deleteTarget.name}</span> を削除します。このスタッフのシフトデータも削除されます。
             </p>
             <div className="flex gap-2">
               <button onClick={() => handleDelete(deleteTarget)}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-xl hover:bg-red-700">
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700">
                 削除する
               </button>
               <button onClick={() => setDeleteTarget(null)}
-                className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200">
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
                 キャンセル
               </button>
             </div>

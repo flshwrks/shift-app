@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings } from '@/components/icons';
 
 export interface Step {
   text: string;
@@ -28,22 +29,36 @@ const colorMap: Record<SectionColor, { bg: string; text: string; light: string; 
   slate:  { bg: 'bg-slate-600',  text: 'text-slate-600',  light: 'bg-slate-50',  border: 'border-slate-200',  badge: 'bg-slate-100 text-slate-600' },
 };
 
+const SECTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  '📝': IconPencil,
+  '📅': IconCalendar,
+  '📨': IconInbox,
+  '👥': IconUsers,
+  '⚙️': IconSettings,
+};
+
+export function SectionIcon({ icon, className = 'w-5 h-5 text-white' }: { icon: string; className?: string }) {
+  const Icon = SECTION_ICONS[icon];
+  if (!Icon) return <span>{icon}</span>;
+  return <Icon className={className} />;
+}
+
 export function HelpSection({ section }: { section: Section }) {
   const [open, setOpen] = useState(true);
   const c = colorMap[section.color];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-4 px-5 py-4 text-left"
       >
-        <div className={`w-11 h-11 rounded-xl ${c.bg} flex items-center justify-center text-xl flex-shrink-0`}>
-          {section.icon}
+        <div className={`w-11 h-11 rounded-xl ${c.bg} flex items-center justify-center flex-shrink-0`}>
+          <SectionIcon icon={section.icon} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-slate-800 text-base">{section.title}</p>
-          <p className="text-xs text-slate-400 mt-0.5">{section.subtitle}</p>
+          <p className="text-sm font-semibold text-slate-900">{section.title}</p>
+          <p className="text-[13px] text-slate-600 mt-0.5">{section.subtitle}</p>
         </div>
         <svg
           className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -62,7 +77,7 @@ export function HelpSection({ section }: { section: Section }) {
                   {i + 1}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-slate-700 leading-relaxed">{step.text}</p>
+                  <p className="text-[13px] text-slate-600 leading-relaxed">{step.text}</p>
                   {step.note && (
                     <p className="text-xs text-slate-400 mt-1 pl-2 border-l-2 border-slate-200">{step.note}</p>
                   )}
@@ -72,9 +87,12 @@ export function HelpSection({ section }: { section: Section }) {
           </div>
 
           {section.tips && section.tips.length > 0 && (
-            <div className={`mt-4 ${c.light} ${c.border} border rounded-xl p-4`}>
-              <p className={`text-xs font-bold ${c.text} mb-2 flex items-center gap-1.5`}>
-                <span>💡</span> ヒント
+            <div className={`mt-4 ${c.light} ${c.border} border rounded-lg p-4`}>
+              <p className={`text-xs font-semibold ${c.text} mb-2 flex items-center gap-1.5`}>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0012 3z" />
+                </svg>
+                ヒント
               </p>
               <ul className="space-y-1.5">
                 {section.tips.map((tip, i) => (
@@ -90,7 +108,7 @@ export function HelpSection({ section }: { section: Section }) {
           {section.href && (
             <Link
               href={section.href}
-              className={`mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium ${c.badge} transition-opacity hover:opacity-80`}
+              className={`mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium ${c.badge} transition-opacity hover:opacity-80`}
             >
               {section.title}を開く
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

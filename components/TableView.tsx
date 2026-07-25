@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { getDaysInMonth, formatDate, getDayLabel, netWorkMinutes, formatTotalHours } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
 import type { User } from '@/lib/types';
@@ -13,6 +13,8 @@ interface Props {
   onMemoChange?: (date: string, value: string) => void;
   isAdmin?: boolean;
   currentUserId?: string;
+  /** 画像出力時 true: 今日ハイライト・操作ボタン・プレースホルダを非表示にする */
+  exportMode?: boolean;
   onConfirm?: (shiftId: string) => void;
   onCellClick?: (userId: string, date: string, shift?: Shift) => void;
   onShiftClick?: (shift: Shift) => void;
@@ -60,7 +62,7 @@ function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v:
   );
 }
 
-export default function TableView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onCellClick, onShiftClick }: Props) {
+const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, exportMode, onConfirm, onCellClick, onShiftClick }, ref) {
   const days = getDaysInMonth(year, month);
   const [allExpanded, setAllExpanded] = useState(false);
   const hasMemos = Object.values(memos).some(v => v);
@@ -71,27 +73,37 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
     shiftMap[s.user_id][s.date] = s;
   });
 
+  // 今日ハイライトは閲覧者の文脈情報であり、共有用の出力画像には含めない
+  const todayKey = exportMode ? '' : formatDate(new Date());
+
+  const dayCounts: Record<string, number> = {};
+  days.forEach((d) => { dayCounts[formatDate(d)] = 0; });
+  shifts.forEach((s) => {
+    if (s.shift_type !== 'off' && dayCounts[s.date] !== undefined) dayCounts[s.date]++;
+  });
+
   return (
-    <div className="overflow-auto rounded-xl border border-slate-200 bg-white">
+    <div ref={ref} className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <table className="border-collapse text-xs min-w-full">
         <thead>
           {/* 日付行 */}
           <tr className="bg-slate-50">
-            <th className="sticky left-0 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 border-b border-r border-slate-200 min-w-[100px] z-10">
+            <th className="sticky left-0 bg-slate-50 px-4 py-3 text-left text-[11px] font-medium text-slate-500 border-b border-r border-slate-200 min-w-[100px] z-10">
               スタッフ
             </th>
             {isAdmin && (
-              <th className="px-3 py-3 font-semibold text-slate-600 border-b border-r border-slate-200 whitespace-nowrap bg-slate-50 text-center">
+              <th className="px-3 py-3 text-[11px] font-medium text-slate-500 border-b border-r border-slate-200 whitespace-nowrap bg-slate-50 text-center">
                 月計
               </th>
             )}
             {days.map((d) => {
               const dow = d.getDay();
+              const isToday = formatDate(d) === todayKey;
               return (
                 <th
                   key={formatDate(d)}
-                  className={`px-2 py-3 font-medium border-b border-r border-slate-100 whitespace-nowrap min-w-[64px] ${
-                    dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'
+                  className={`px-2 py-3 text-[11px] font-medium border-b border-r border-slate-100 whitespace-nowrap min-w-[64px] ${
+                    isToday ? 'bg-blue-50 text-blue-700 font-semibold' : dow === 0 ? 'text-rose-500' : dow === 6 ? 'text-sky-600' : 'text-slate-500'
                   }`}
                 >
                   {getDayLabel(d)}
@@ -123,8 +135,26 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
                   <MemoCell
                     value={memos[key] ?? ''}
                     expanded={allExpanded}
-                    onChange={isAdmin && onMemoChange ? (v) => onMemoChange(key, v) : undefined}
+                    onChange={isAdmin && onMemoChange && !exportMode ? (v) => onMemoChange(key, v) : undefined}
                   />
+                </td>
+              );
+            })}
+          </tr>
+          {/* 出勤人数行 */}
+          <tr className="bg-white border-b border-slate-200">
+            <th className="sticky left-0 bg-white px-4 py-1 text-left text-[10px] font-medium text-slate-400 border-r border-slate-200 z-10 whitespace-nowrap">
+              出勤
+            </th>
+            {isAdmin && <td className="border-r border-slate-100" />}
+            {days.map((d) => {
+              const key = formatDate(d);
+              const count = dayCounts[key] ?? 0;
+              return (
+                <td key={key} className="px-1 py-1 border-r border-slate-100 min-w-[64px]">
+                  <div className={`text-[11px] tabular-nums text-center ${count === 0 ? 'text-rose-500 font-semibold' : 'text-slate-600'}`}>
+                    {count}
+                  </div>
                 </td>
               );
             })}
@@ -133,7 +163,7 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
         <tbody>
           {users.map((u, ui) => {
             const totalMin = calcTotalMinutes(u.id, shiftMap);
-            const isMe = currentUserId === u.id;
+            const isMe = !exportMode && currentUserId === u.id;
             return (
             <tr key={u.id} className={isMe ? 'bg-blue-50/40' : ui % 2 === 0 ? '' : 'bg-slate-50/50'}>
               <td className={`sticky left-0 px-4 py-2.5 font-medium border-r border-slate-200 z-10 whitespace-nowrap ${isMe ? 'bg-blue-50 text-blue-700 border-l-2 border-l-blue-400' : 'bg-white text-slate-700'}`}>
@@ -141,7 +171,7 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
               </td>
               {isAdmin && (
                 <td className="px-3 py-2.5 border-r border-slate-200 text-center whitespace-nowrap">
-                  <span className={`text-xs font-semibold ${totalMin > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                  <span className={`text-xs font-semibold tabular-nums ${totalMin > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
                     {formatTotalHours(totalMin)}
                   </span>
                 </td>
@@ -149,16 +179,17 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
               {days.map((d) => {
                 const key = formatDate(d);
                 const s = shiftMap[u.id]?.[key];
+                const isToday = key === todayKey;
                 return (
                   <td
                     key={key}
-                    className={`px-1 py-1.5 border-r border-slate-100 text-center align-middle ${isAdmin && onCellClick ? 'cursor-pointer hover:bg-blue-50/50' : ''}`}
+                    className={`group px-1 py-1.5 border-r border-slate-100 text-center align-middle ${isToday ? 'bg-blue-50/30' : ''} ${isAdmin && onCellClick ? 'cursor-pointer hover:bg-blue-50/50' : ''}`}
                     onClick={() => isAdmin && onCellClick && onCellClick(u.id, key, s)}
                   >
                     {s ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <button
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-white font-bold text-xs hover:brightness-110 transition-[filter]"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-white font-bold text-xs tabular-nums whitespace-nowrap hover:brightness-110 transition-[filter]"
                           style={{ backgroundColor: SHIFT_COLORS[s.shift_type] }}
                           title={s.comment || undefined}
                           onClick={e => { e.stopPropagation(); onShiftClick?.(s); }}
@@ -167,22 +198,24 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
                           {s.comment && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-90 flex-shrink-0" />}
                         </button>
                         {s.status === 'draft' && (
-                          <span className="text-[10px] text-amber-600 font-medium">申請中</span>
+                          <span className="text-[10px] px-1.5 py-px rounded font-medium whitespace-nowrap bg-amber-50 text-amber-700 border border-amber-200">申請中</span>
                         )}
-                        {s.status === 'draft' && isAdmin && onConfirm && (
+                        {s.status === 'draft' && isAdmin && onConfirm && !exportMode && (
                           <button
                             onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
-                            className="text-[10px] px-1.5 py-px rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            className="text-[10px] px-1.5 py-px rounded whitespace-nowrap bg-white border border-blue-300 text-blue-700 hover:bg-blue-50"
                           >
                             確定する
                           </button>
                         )}
                         {s.status === 'confirmed' && (
-                          <span className="text-[10px] text-green-600 font-medium">確定</span>
+                          <span className="text-[10px] px-1.5 py-px rounded font-medium whitespace-nowrap bg-emerald-50 text-emerald-700 border border-emerald-200">確定</span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-slate-200">+</span>
+                      isAdmin && onCellClick ? (
+                        <span className="text-slate-300 opacity-0 group-hover:opacity-100">＋</span>
+                      ) : null
                     )}
                   </td>
                 );
@@ -194,4 +227,6 @@ export default function TableView({ year, month, users, shifts, memos = {}, onMe
       </table>
     </div>
   );
-}
+});
+
+export default TableView;

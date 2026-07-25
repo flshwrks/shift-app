@@ -55,3 +55,31 @@ export const SHIFT_COLORS: Record<ShiftType, string> = {
 };
 
 export const DAY_NAMES_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+export type RequestType = 'targeted' | 'open';
+export type RequestStatus = 'open' | 'fulfilled' | 'cancelled';
+export type TargetStatus = 'pending' | 'accepted' | 'declined';
+
+export interface ShiftRequest {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  shift_type: Exclude<ShiftType, 'off'> | null;
+  message: string;
+  request_type: RequestType;
+  created_by: string | null;
+  status: RequestStatus;
+  created_at: string;
+  creator?: User;
+  targets?: ShiftRequestTarget[];
+}
+
+export interface ShiftRequestTarget {
+  id: string;
+  request_id: string;
+  user_id: string;
+  status: TargetStatus;
+  responded_at: string | null;
+  user?: User;
+}

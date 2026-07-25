@@ -52,17 +52,17 @@ export default function ShiftDetailModal({ shift, users, isAdmin, onClose, onEdi
           {/* 詳細情報グリッド */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[11px] text-slate-400 mb-0.5">日付</p>
+              <p className="text-[11px] font-medium text-slate-500 mb-0.5">日付</p>
               <p className="text-sm font-medium text-slate-700">{dateLabel}</p>
             </div>
             <div>
-              <p className="text-[11px] text-slate-400 mb-0.5">時間</p>
-              <p className="text-sm font-medium text-slate-700">{shift.start_time} 〜 {shift.end_time}</p>
+              <p className="text-[11px] font-medium text-slate-500 mb-0.5">時間</p>
+              <p className="text-sm font-medium text-slate-700 tabular-nums">{shift.start_time} 〜 {shift.end_time}</p>
             </div>
             <div>
-              <p className="text-[11px] text-slate-400 mb-0.5">ステータス</p>
-              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                shift.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              <p className="text-[11px] font-medium text-slate-500 mb-0.5">ステータス</p>
+              <span className={`inline-block text-[10px] px-1.5 py-px rounded font-medium border ${
+                shift.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}>
                 {shift.status === 'confirmed' ? '確定済み' : '申請中'}
               </span>
@@ -71,8 +71,8 @@ export default function ShiftDetailModal({ shift, users, isAdmin, onClose, onEdi
 
           {shift.comment && (
             <div>
-              <p className="text-[11px] text-slate-400 mb-1">コメント</p>
-              <p className="text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2">{shift.comment}</p>
+              <p className="text-[11px] font-medium text-slate-500 mb-1">コメント</p>
+              <p className="text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">{shift.comment}</p>
             </div>
           )}
         </div>
@@ -82,7 +82,7 @@ export default function ShiftDetailModal({ shift, users, isAdmin, onClose, onEdi
           {isAdmin && onEdit && (
             <button
               onClick={onEdit}
-              className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+              className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-blue-700"
             >
               編集
             </button>
@@ -90,14 +90,14 @@ export default function ShiftDetailModal({ shift, users, isAdmin, onClose, onEdi
           {isAdmin && shift.status === 'draft' && onConfirm && (
             <button
               onClick={onConfirm}
-              className="flex-1 py-2.5 bg-green-600 text-white text-sm font-medium rounded-xl hover:bg-green-700"
+              className="flex-1 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-emerald-700"
             >
               確定
             </button>
           )}
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+            className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50"
           >
             閉じる
           </button>

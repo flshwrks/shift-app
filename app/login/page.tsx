@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { hashPin } from '@/lib/shifts';
 import type { User } from '@/lib/types';
+import BrandMark from '@/components/BrandMark';
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -31,13 +32,19 @@ export default function LoginPage() {
       .then(({ data }) => setUsers(data ?? []));
   }, []);
 
-  const handleDevKey = (key: string) => {
+  const handlePinKey = (key: string, onComplete: (code: string) => void) => {
     if (key === 'del') { setPin(p => p.slice(0, -1)); setError(''); return; }
     if (pin.length >= 4) return;
     const next = pin + key;
     setPin(next);
     if (next.length === 4) {
-      if (next === '0805') {
+      onComplete(next);
+    }
+  };
+
+  const handleDevKey = (key: string) => {
+    handlePinKey(key, (code) => {
+      if (code === '0805') {
         login({ id: '__dev__', name: '開発者', role: 'developer' });
       } else {
         setIsShaking(true);
@@ -45,21 +52,11 @@ export default function LoginPage() {
         setPin('');
         setTimeout(() => setIsShaking(false), 400);
       }
-    }
+    });
   };
 
-  const handleKey = async (key: string) => {
-    if (key === 'del') {
-      setPin((p) => p.slice(0, -1));
-      setError('');
-      return;
-    }
-    if (pin.length >= 4) return;
-    const next = pin + key;
-    setPin(next);
-    if (next.length === 4) {
-      await handleLogin(next);
-    }
+  const handleKey = (key: string) => {
+    handlePinKey(key, (code) => { handleLogin(code); });
   };
 
   const handleLogin = async (enteredPin: string) => {
@@ -89,10 +86,10 @@ export default function LoginPage() {
   if (devMode) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className={`bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
+        <div className={`bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
           <button
             onClick={() => { setDevMode(false); setPin(''); setError(''); }}
-            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1"
+            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1 rounded-md"
           >
             ← 戻る
           </button>
@@ -109,16 +106,16 @@ export default function LoginPage() {
             ))}
           </div>
           {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 tabular-nums">
             {['1','2','3','4','5','6','7','8','9','','0','del'].map((k) => (
               <button
                 key={k}
                 onClick={() => k && handleDevKey(k)}
                 disabled={!k}
-                className={`h-14 rounded-xl text-lg font-semibold transition-all active:scale-95 ${
-                  k === 'del' ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                className={`h-14 rounded-xl text-lg font-medium tabular-nums transition-all active:scale-95 ${
+                  k === 'del' ? 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                   : k === '' ? 'bg-transparent cursor-default'
-                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                  : 'bg-white border border-slate-200 hover:bg-slate-50'
                 } disabled:opacity-50`}
               >
                 {k === 'del' ? '⌫' : k}
@@ -133,10 +130,10 @@ export default function LoginPage() {
   if (selected) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className={`bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
+        <div className={`bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
           <button
             onClick={() => { setSelected(null); setPin(''); setError(''); }}
-            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1"
+            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1 rounded-md"
           >
             ← 戻る
           </button>
@@ -163,18 +160,18 @@ export default function LoginPage() {
           {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
 
           {/* Numpad */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 tabular-nums">
             {['1','2','3','4','5','6','7','8','9','','0','del'].map((k) => (
               <button
                 key={k}
                 onClick={() => k && handleKey(k)}
                 disabled={!k || isLoading}
-                className={`h-14 rounded-xl text-lg font-semibold transition-all active:scale-95 ${
+                className={`h-14 rounded-xl text-lg font-medium tabular-nums transition-all active:scale-95 ${
                   k === 'del'
-                    ? 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                     : k === ''
                     ? 'bg-transparent cursor-default'
-                    : 'bg-slate-100 text-slate-800 hover:bg-blue-50 hover:text-blue-600'
+                    : 'bg-white border border-slate-200 hover:bg-slate-50'
                 } disabled:opacity-50`}
               >
                 {k === 'del' ? '⌫' : k}
@@ -191,8 +188,11 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-md">
         <div className="text-center mb-8">
+          <div className="mx-auto mb-4 w-fit">
+            <BrandMark size="lg" />
+          </div>
           <h1 className="text-2xl font-bold text-slate-800">シフト管理</h1>
           <p className="text-slate-500 text-sm mt-2">名前を選択してください</p>
         </div>
@@ -204,16 +204,16 @@ export default function LoginPage() {
               <button
                 key={u.id}
                 onClick={() => setSelected(u)}
-                className="flex items-center gap-3 p-4 rounded-xl border-2 border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all text-left group"
+                className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 focus-visible:border-slate-400 transition-all text-left group"
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${
-                  u.role === 'admin' ? 'bg-orange-500' : 'bg-blue-500'
+                  u.role === 'admin' ? 'bg-amber-500' : 'bg-blue-500'
                 }`}>
                   {u.name[0]}
                 </div>
                 <div>
                   <p className="font-semibold text-slate-800 text-sm">{u.name}</p>
-                  <p className="text-xs text-slate-400">{u.role === 'admin' ? '管理者' : 'スタッフ'}</p>
+                  <p className={u.role === 'admin' ? 'text-xs font-medium text-amber-700' : 'text-xs text-slate-400'}>{u.role === 'admin' ? '管理者' : 'スタッフ'}</p>
                 </div>
               </button>
             ))}

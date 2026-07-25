@@ -3,18 +3,19 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { monthStart, monthEnd, netWorkMinutes, formatTotalHours } from '@/lib/shifts';
 import { useAuth } from '@/lib/auth';
+import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import TableView from '@/components/TableView';
 import TimelineView from '@/components/TimelineView';
 import ShiftDetailModal from '@/components/ShiftDetailModal';
 import type { Shift, User } from '@/lib/types';
+import { useTableExport } from '@/lib/useTableExport';
+import { IconChevronLeft, IconChevronRight, IconDownload } from '@/components/icons';
 
 type ViewMode = 'table' | 'timeline';
 
 export default function StaffSchedulePage() {
-  const now = new Date();
   const { user: authUser } = useAuth();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
+  const { year, month, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth } = usePersistedMonth('month_staff_schedule');
   const [view, setView] = useState<ViewMode>('table');
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -65,30 +66,58 @@ export default function StaffSchedulePage() {
     };
   }, [year, month]);
 
-  const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
-  const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
+  const { tableRef, exporting, handleExportImage } = useTableExport(year, month);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={prevMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600">◀</button>
-          <h2 className="text-lg font-bold text-slate-800">{year}年{month + 1}月</h2>
-          <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600">▶</button>
-          {authUser && (
-            <span className="ml-1 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-xs font-semibold text-blue-600">
+      <div className="mb-4 space-y-2">
+        {/* Row1: 月ナビ ＋ 今月バッジ — コントロール類は置かない */}
+        <div className="flex items-center gap-2">
+          <button onClick={prevMonth} aria-label="前の月" className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center">
+            <IconChevronLeft className="w-4 h-4" />
+          </button>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap">{year}年{month + 1}月</h2>
+          <button onClick={nextMonth} aria-label="次の月" className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center">
+            <IconChevronRight className="w-4 h-4" />
+          </button>
+          {!isCurrentMonth && (
+            <button
+              onClick={goToCurrentMonth}
+              className="text-xs px-2 h-7 rounded-md bg-white border border-slate-300 text-slate-600 hover:bg-slate-50"
+            >
+              今月へ
+            </button>
+          )}
+          {authUser && myTotalMin > 0 && (
+            <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 tabular-nums whitespace-nowrap">
               今月 {formatTotalHours(myTotalMin)}
             </span>
           )}
         </div>
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-          <button onClick={() => setView('table')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>表形式</button>
-          <button onClick={() => setView('timeline')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>タイムライン</button>
+        {/* Row2: ビュー切替 ＋ 保存 — 右寄せで独立 */}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+            <button onClick={() => setView('table')} className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${view === 'table' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>表形式</button>
+            <button onClick={() => setView('timeline')} className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${view === 'timeline' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>タイムライン</button>
+          </div>
+          {view === 'table' && (
+            <button
+              onClick={handleExportImage}
+              disabled={exporting}
+              title={exporting ? '生成中…' : '画像保存'}
+              className="ml-auto w-8 h-8 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 flex items-center justify-center disabled:opacity-50"
+            >
+              {exporting
+                ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/></svg>
+                : <IconDownload className="w-4 h-4" />
+              }
+            </button>
+          )}
         </div>
       </div>
 
       {view === 'table'
-        ? <TableView year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} onShiftClick={s => setDetailShift(s)} />
+        ? <TableView ref={tableRef} year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} exportMode={exporting} onShiftClick={s => setDetailShift(s)} />
         : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} onShiftClick={s => setDetailShift(s)} />}
 
       {detailShift && (

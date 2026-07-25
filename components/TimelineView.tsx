@@ -28,6 +28,7 @@ interface Props {
   currentUserId?: string;
   onConfirm?: (shiftId: string) => void;
   onShiftClick?: (shift: Shift) => void;
+  onRequestSlot?: (date: string, startTime: string, endTime: string) => void;
 }
 
 function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: number }> {
@@ -82,7 +83,14 @@ function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v:
   );
 }
 
-export default function TimelineView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onShiftClick }: Props) {
+function slotToTime(slotIndex: number): string {
+  const totalMins = START_HOUR * 60 + slotIndex * 30;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export default function TimelineView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onShiftClick, onRequestSlot }: Props) {
   const days = getDaysInMonth(year, month);
   const minWidth = TIME_COL_WIDTH + COL_WIDTH * days.length;
   const [allExpanded, setAllExpanded] = useState(false);
@@ -120,7 +128,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
       <div className="overflow-auto">
         <div style={{ minWidth }}>
 
@@ -138,14 +146,14 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                 <div
                   key={formatDate(day)}
                   className={`flex-shrink-0 border-r border-slate-100 flex flex-col items-center justify-center gap-px ${
-                    isSun ? 'bg-red-50' : isSat ? 'bg-blue-50' : 'bg-slate-50'
+                    isSun ? 'bg-rose-50' : isSat ? 'bg-sky-50' : 'bg-slate-50'
                   }`}
                   style={{ width: COL_WIDTH, height: HEADER_HEIGHT }}
                 >
-                  <span className={`text-[11px] font-bold leading-none ${isSun ? 'text-red-500' : isSat ? 'text-blue-500' : 'text-slate-700'}`}>
+                  <span className={`text-[11px] font-medium tabular-nums leading-none ${isSun ? 'text-rose-500' : isSat ? 'text-sky-600' : 'text-slate-700'}`}>
                     {day.getDate()}
                   </span>
-                  <span className={`text-[9px] leading-none ${isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-slate-400'}`}>
+                  <span className={`text-[9px] leading-none ${isSun ? 'text-rose-400' : isSat ? 'text-sky-500' : 'text-slate-400'}`}>
                     {'日月火水木金土'[dow]}
                   </span>
                 </div>
@@ -197,7 +205,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
               {HOURS.map((h) => (
                 <div key={h} className="absolute left-0 right-0" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }}>
                   <div className="absolute top-0 left-0 right-0 border-t border-slate-200" />
-                  <span className="text-[10px] text-slate-400 pl-1.5 block -translate-y-2 leading-none">{h}:00</span>
+                  <span className="text-[10px] text-slate-400 tabular-nums pl-1.5 block -translate-y-2 leading-none">{h}:00</span>
                 </div>
               ))}
             </div>
@@ -214,19 +222,29 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
               return (
                 <div
                   key={dateStr}
-                  className={`flex-shrink-0 border-r border-slate-100 relative ${isSun ? 'bg-red-50/30' : isSat ? 'bg-blue-50/20' : ''}`}
+                  className={`flex-shrink-0 border-r border-slate-100 relative ${isSun ? 'bg-rose-50/30' : isSat ? 'bg-sky-50/20' : ''}`}
                   style={{ width: COL_WIDTH, height: TOTAL_HEIGHT }}
                 >
                   {counts.map((count, i) => {
                     const bg = slotBg(count, i);
                     if (!bg) return null;
+                    const canRequest = isAdmin && !!onRequestSlot;
                     return (
-                      <div key={`bg-${i}`} className="absolute left-0 right-0 pointer-events-none"
+                      <div
+                        key={`bg-${i}`}
+                        className={`absolute left-0 right-0 ${canRequest ? 'cursor-pointer hover:brightness-90 transition-[filter]' : 'pointer-events-none'}`}
                         style={{
                           top: (i * 30 / 60) * HOUR_HEIGHT,
                           height: (30 / 60) * HOUR_HEIGHT,
                           backgroundColor: bg,
                         }}
+                        onClick={canRequest ? () => {
+                          let start = i;
+                          let end = i;
+                          while (start > 0 && slotBg(counts[start - 1], start - 1) !== null) start--;
+                          while (end < counts.length - 1 && slotBg(counts[end + 1], end + 1) !== null) end++;
+                          onRequestSlot(dateStr, slotToTime(start), slotToTime(end + 1));
+                        } : undefined}
                       />
                     );
                   })}
@@ -279,7 +297,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                             <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
                           )}
                         </div>
-                        <span className="text-white/90 text-[9px] leading-tight truncate px-1">
+                        <span className="text-white/90 text-[9px] tabular-nums leading-tight truncate px-1">
                           {s.start_time}〜{s.end_time}
                         </span>
                         {isAdmin && s.status === 'draft' && onConfirm && height > 44 && (

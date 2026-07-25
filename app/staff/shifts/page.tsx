@@ -1,12 +1,15 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import { supabase } from '@/lib/supabase';
 import {
   getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, isWeekend,
+  netWorkMinutes, formatTotalHours,
 } from '@/lib/shifts';
 import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { IconClipboard, IconCheck, IconChevronLeft, IconChevronRight } from '@/components/icons';
 
 const SHIFT_LIST = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
@@ -27,8 +30,7 @@ const defaultDay = (): DayShift => ({
 export default function ShiftsPage() {
   const { user } = useAuth();
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
+  const { year, month, setYearMonth, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth, wasRestored } = usePersistedMonth('month_staff_shifts');
   const [days, setDays] = useState<Date[]>([]);
   const [shifts, setShifts] = useState<Record<string, DayShift>>({});
   const [openDate, setOpenDate] = useState('');
@@ -51,7 +53,9 @@ export default function ShiftsPage() {
   }, [user]);
 
   // 初回マウント時：提出期間がアクティブな月に自動ジャンプ
+  // （前回開いていた月が復元済みの場合は、そちらを優先してジャンプしない）
   useEffect(() => {
+    if (wasRestored) return;
     const today = new Date().toISOString().split('T')[0];
     const candidates = Array.from({ length: 4 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -70,8 +74,7 @@ export default function ShiftsPage() {
           const open = map[`period_open_${ym}`] ?? '';
           const close = map[`period_close_${ym}`] ?? '';
           if ((open || close) && (!open || today >= open) && (!close || today <= close)) {
-            setYear(c.year);
-            setMonth(c.month);
+            setYearMonth(c.year, c.month);
             return;
           }
         }
@@ -198,6 +201,20 @@ export default function ShiftsPage() {
 
   const dirtyCount = Object.values(shifts).filter(s => s.dirty).length;
 
+  // 月間サマリー（現在の入力内容ベースで派生集計、未提出の下書きも含む）
+  const monthSummary = days.reduce(
+    (acc, day) => {
+      const s = shifts[formatDate(day)];
+      if (!s?.shiftType) return acc;
+      if (s.shiftType === 'off') { acc.offDays += 1; return acc; }
+      acc.workDays += 1;
+      acc.totalMinutes += netWorkMinutes(s.startTime, s.endTime);
+      return acc;
+    },
+    { workDays: 0, offDays: 0, totalMinutes: 0 },
+  );
+  const hasSummary = monthSummary.workDays > 0 || monthSummary.offDays > 0;
+
   const handleSubmitAll = async () => {
     if (!user || isLocked) return;
     setSubmitting(true);
@@ -240,9 +257,6 @@ export default function ShiftsPage() {
     setSubmitDone(true);
     setTimeout(() => setSubmitDone(false), 3000);
   };
-
-  const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
-  const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
   // コピーモード
   const [copyingShift, setCopyingShift] = useState<DayShift | null>(null);
@@ -314,16 +328,28 @@ export default function ShiftsPage() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">◀</button>
-          <h2 className="text-lg font-bold text-slate-800 whitespace-nowrap">{year}年{month + 1}月</h2>
-          <button onClick={nextMonth} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-600 text-lg">▶</button>
+          <button onClick={prevMonth} aria-label="前の月" className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center">
+            <IconChevronLeft className="w-4 h-4" />
+          </button>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900 whitespace-nowrap">{year}年{month + 1}月</h2>
+          <button onClick={nextMonth} aria-label="次の月" className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center">
+            <IconChevronRight className="w-4 h-4" />
+          </button>
+          {!isCurrentMonth && (
+            <button
+              onClick={goToCurrentMonth}
+              className="text-xs px-2 h-7 rounded-md bg-white border border-slate-300 text-slate-600 hover:bg-slate-50"
+            >
+              今月へ
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {!isLocked && (
             <button
               onClick={copyFromPrevMonth}
               disabled={copying}
-              className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg disabled:opacity-50"
+              className="text-xs px-3 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               {copying ? '取得中…' : '前月コピー'}
             </button>
@@ -355,16 +381,35 @@ export default function ShiftsPage() {
         </div>
       )}
 
+      {/* 月間サマリー */}
+      {hasSummary && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3 mb-4 grid grid-cols-3 divide-x divide-slate-100">
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xl font-bold text-slate-800 tabular-nums">{monthSummary.workDays}日</span>
+            <span className="text-[11px] font-medium text-slate-500">出勤日数</span>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xl font-bold text-slate-800 tabular-nums">{monthSummary.offDays}日</span>
+            <span className="text-[11px] font-medium text-slate-500">休み</span>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xl font-bold text-slate-800 tabular-nums">{formatTotalHours(monthSummary.totalMinutes)}</span>
+            <span className="text-[11px] font-medium text-slate-500">予定時間</span>
+            <span className="text-[9px] text-slate-300">休憩控除後</span>
+          </div>
+        </div>
+      )}
+
       {/* シフト凡例 */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-3 mb-4">
-        <p className="text-[10px] font-semibold text-slate-400 mb-2 uppercase tracking-wide">シフト種別</p>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3 mb-4">
+        <p className="text-[11px] font-medium text-slate-500 mb-2">シフト種別</p>
         <div className="grid grid-cols-3 gap-1.5">
           {SHIFT_LIST.map(type => {
             const p = SHIFT_PRESETS[type];
             return (
               <div key={type} className="flex items-center gap-1.5">
                 <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
-                <span className="text-[11px] text-slate-500">{p.start}〜{p.end}</span>
+                <span className="text-[11px] text-slate-500 tabular-nums">{p.start}〜{p.end}</span>
               </div>
             );
           })}
@@ -383,24 +428,33 @@ export default function ShiftsPage() {
           const dow = day.getDay();
           const isRed = dow === 0;
           const isBlue = dow === 6;
+          const isToday = key === formatDate(new Date());
+          const rowTappable = !copyingShift && !isLocked;
+          const bgClass = isRed ? 'bg-rose-50/40' : isBlue ? 'bg-sky-50/40' : 'bg-white';
+          const borderClass = s.dirty ? 'border-blue-300' : isToday ? 'border-blue-200' : 'border-slate-200';
 
           return (
-            <div key={key} className={`bg-white rounded-2xl border flex items-center px-4 py-3 gap-3 ${s.dirty ? 'border-blue-300' : 'border-slate-200'}`}>
+            <div
+              key={key}
+              onClick={rowTappable ? () => openPopup(key, day) : undefined}
+              className={`rounded-xl border flex items-center px-4 py-3 gap-3 ${bgClass} ${borderClass} ${rowTappable ? 'cursor-pointer active:bg-slate-50' : ''}`}
+            >
               {/* 日付 */}
-              <div className={`w-14 flex-shrink-0 text-sm font-bold ${isRed ? 'text-red-500' : isBlue ? 'text-blue-500' : 'text-slate-700'}`}>
+              <div className={`w-14 flex-shrink-0 text-sm font-bold flex items-center gap-1 ${isRed ? 'text-red-500' : isBlue ? 'text-blue-500' : 'text-slate-700'}`}>
                 {getDayLabel(day)}
+                {isToday && <span className="text-[9px] font-bold bg-blue-600 text-white px-1 py-px rounded">今日</span>}
               </div>
 
               {/* シフト表示 */}
               <div className="flex-1 min-w-0">
                 {s.shiftType ? (
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-white text-xs font-bold" style={{ backgroundColor: SHIFT_COLORS[s.shiftType] }}>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-white text-xs font-bold tabular-nums" style={{ backgroundColor: SHIFT_COLORS[s.shiftType] }}>
                       {s.shiftType === 'off' ? '休み' : s.shiftType === 'custom' ? `${s.startTime}〜${s.endTime}` : `${s.shiftType}  ${s.startTime}〜${s.endTime}`}
                     </span>
-                    {s.dirty && <span className="text-[10px] text-blue-500 font-medium">未提出</span>}
-                    {!s.dirty && s.status === 'draft' && <span className="text-[10px] text-amber-600 font-medium">申請中</span>}
-                    {!s.dirty && s.status === 'confirmed' && <span className="text-[10px] text-green-600 font-medium">確定</span>}
+                    {s.dirty && <span className="text-[10px] px-1.5 py-px rounded font-medium bg-blue-50 text-blue-700 border border-blue-200">未提出</span>}
+                    {!s.dirty && s.status === 'draft' && <span className="text-[10px] px-1.5 py-px rounded font-medium bg-amber-50 text-amber-700 border border-amber-200">申請中</span>}
+                    {!s.dirty && s.status === 'confirmed' && <span className="text-[10px] px-1.5 py-px rounded font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">確定</span>}
                   </div>
                 ) : (
                   <span className="text-sm text-slate-300">—</span>
@@ -412,7 +466,7 @@ export default function ShiftsPage() {
               {copyingShift && (
                 <button
                   onClick={() => toggleCopyTarget(key)}
-                  className={`flex-shrink-0 w-9 h-9 rounded-xl border-2 flex items-center justify-center text-sm transition-colors ${
+                  className={`flex-shrink-0 w-9 h-9 rounded-lg border-2 flex items-center justify-center text-sm transition-colors ${
                     copyTargets.has(key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 text-slate-300'
                   }`}
                 >
@@ -425,8 +479,8 @@ export default function ShiftsPage() {
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {s.shiftType && (
                     <button
-                      onClick={() => startCopy(key)}
-                      className="px-2 h-9 rounded-xl bg-slate-100 hover:bg-amber-50 hover:text-amber-600 text-slate-400 text-xs font-medium transition-colors active:scale-95"
+                      onClick={(e) => { e.stopPropagation(); startCopy(key); }}
+                      className="px-2 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium transition-colors active:scale-95"
                       title="他の日にコピー"
                     >
                       コピー
@@ -434,7 +488,7 @@ export default function ShiftsPage() {
                   )}
                   <button
                     onClick={() => openPopup(key, day)}
-                    className="w-16 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 text-xs font-medium transition-colors active:scale-95"
+                    className="w-16 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-medium transition-colors active:scale-95"
                   >
                     入力
                   </button>
@@ -451,10 +505,10 @@ export default function ShiftsPage() {
           <button
             onClick={applyCopy}
             disabled={copyTargets.size === 0}
-            className={`w-full h-14 rounded-2xl text-base font-bold transition-all active:scale-[0.98] ${
+            className={`w-full h-12 rounded-xl text-base font-bold transition-all active:scale-[0.98] ${
               copyTargets.size === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                : 'bg-blue-600 text-white shadow-sm'
             }`}
           >
             {copyTargets.size > 0 ? `${copyTargets.size}日にコピーする` : 'コピー先を選択してください'}
@@ -468,12 +522,12 @@ export default function ShiftsPage() {
           <button
             onClick={handleSubmitAll}
             disabled={dirtyCount === 0 || submitting}
-            className={`w-full h-14 rounded-2xl text-base font-bold transition-all active:scale-[0.98] ${
+            className={`w-full h-12 rounded-xl text-base font-bold transition-all active:scale-[0.98] ${
               submitDone
                 ? 'bg-green-500 text-white'
                 : dirtyCount === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                : 'bg-blue-600 text-white shadow-sm'
             }`}
           >
             {submitting ? '提出中…' : submitDone ? '✓ 提出完了' : dirtyCount > 0 ? `${dirtyCount}日分をまとめて提出` : '変更なし'}
@@ -486,7 +540,9 @@ export default function ShiftsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm">
             <div className="flex items-start gap-3 mb-4">
-              <span className="text-3xl leading-none">📋</span>
+              <span className="w-10 h-10 flex-shrink-0 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+                <IconClipboard className="w-5 h-5" strokeWidth={2} />
+              </span>
               <div>
                 <p className="font-bold text-slate-800">未提出のシフトがあります</p>
                 <p className="text-sm text-slate-500 mt-0.5">前回の入力がまだ提出されていません。確認して提出してください。</p>
@@ -495,13 +551,13 @@ export default function ShiftsPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDraftAlert(false)}
-                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
               >
                 確認する
               </button>
               <button
                 onClick={() => setShowDraftAlert(false)}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+                className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50"
               >
                 あとで
               </button>
@@ -515,7 +571,7 @@ export default function ShiftsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm text-center">
             <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="text-3xl">✅</span>
+              <IconCheck className="w-[26px] h-[26px] text-green-600" strokeWidth={2.5} />
             </div>
             <p className="font-bold text-slate-800 text-base">全日程の入力が完了しました</p>
             <p className="text-sm text-slate-500 mt-1 mb-5">
@@ -524,13 +580,13 @@ export default function ShiftsPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setShowSubmitPrompt(false); handleSubmitAll(); }}
-                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700"
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
               >
                 今すぐ提出
               </button>
               <button
                 onClick={() => setShowSubmitPrompt(false)}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-600 text-sm rounded-xl hover:bg-slate-200"
+                className="flex-1 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50"
               >
                 あとで
               </button>
@@ -544,7 +600,7 @@ export default function ShiftsPage() {
         <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={closePopup}>
           <div className="bg-black/40 absolute inset-0" />
           <div
-            className="relative bg-white rounded-t-3xl p-5 pb-8 max-h-[85vh] overflow-y-auto"
+            className="relative bg-white rounded-t-2xl p-5 pb-8 max-h-[85vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             {/* ハンドル */}
@@ -573,8 +629,8 @@ export default function ShiftsPage() {
                   <button
                     key={type}
                     onClick={() => selectType(type)}
-                    className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-[0.97] text-left ${
-                      selected ? 'border-transparent text-white' : 'border-slate-100 bg-slate-50 text-slate-700'
+                    className={`flex items-center gap-3 p-3.5 rounded-lg border-2 transition-all active:scale-[0.97] text-left ${
+                      selected ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700'
                     }`}
                     style={selected ? { backgroundColor: SHIFT_COLORS[type] } : {}}
                   >
@@ -590,8 +646,8 @@ export default function ShiftsPage() {
             {/* カスタム */}
             <button
               onClick={() => selectType('custom')}
-              className={`w-full flex items-center justify-between p-3.5 rounded-2xl border-2 mb-2 transition-all ${
-                editShift.shiftType === 'custom' ? 'border-slate-600 bg-slate-600 text-white' : 'border-slate-100 bg-slate-50 text-slate-700'
+              className={`w-full flex items-center justify-between p-3.5 rounded-lg border-2 mb-2 transition-all ${
+                editShift.shiftType === 'custom' ? 'border-slate-600 bg-slate-600 text-white' : 'border-slate-200 bg-white text-slate-700'
               }`}
             >
               <span className="font-bold">カスタム</span>
@@ -604,14 +660,14 @@ export default function ShiftsPage() {
                   type="time"
                   value={editShift.startTime}
                   onChange={e => { if (e.target.value) setEditShift(ev => ({ ...ev, startTime: e.target.value })); }}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <span className="text-slate-400">〜</span>
                 <input
                   type="time"
                   value={editShift.endTime}
                   onChange={e => { if (e.target.value) setEditShift(ev => ({ ...ev, endTime: e.target.value })); }}
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
               </div>
             )}
@@ -619,8 +675,8 @@ export default function ShiftsPage() {
             {/* 休み */}
             <button
               onClick={() => selectType('off')}
-              className={`w-full flex items-center justify-between p-3.5 rounded-2xl border-2 mb-4 font-medium transition-all ${
-                editShift.shiftType === 'off' ? 'border-transparent text-white' : 'border-slate-100 bg-slate-50 text-slate-500'
+              className={`w-full flex items-center justify-between p-3.5 rounded-lg border-2 mb-4 font-medium transition-all ${
+                editShift.shiftType === 'off' ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-500'
               }`}
               style={editShift.shiftType === 'off' ? { backgroundColor: SHIFT_COLORS.off } : {}}
             >
@@ -634,13 +690,13 @@ export default function ShiftsPage() {
               placeholder="コメント（任意）"
               value={editShift.comment}
               onChange={e => setEditShift(ev => ({ ...ev, comment: e.target.value }))}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-300"
+              className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-300"
             />
 
             {/* 決定 */}
             <button
               onClick={applyEdit}
-              className="w-full h-13 py-3.5 bg-blue-600 text-white rounded-2xl font-bold text-base active:scale-[0.98] transition-transform"
+              className="w-full h-12 py-3.5 bg-blue-600 text-white rounded-xl font-bold text-base active:scale-[0.98] transition-transform"
             >
               決定
             </button>

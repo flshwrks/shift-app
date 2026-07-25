@@ -1,17 +1,19 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import type { Section, SectionColor } from '@/components/HelpSection';
+import { SectionIcon, type Section, type SectionColor } from '@/components/HelpSection';
+import { SHIFT_COLORS, SHIFT_PRESETS, type ShiftType } from '@/lib/types';
 
-const SHIFT_TYPES = [
-  { type: 'A', color: '#3B82F6', time: '8:00〜13:00' },
-  { type: 'B', color: '#8B5CF6', time: '9:00〜14:00' },
-  { type: 'C', color: '#10B981', time: '8:00〜17:00' },
-  { type: 'D', color: '#F59E0B', time: '9:00〜18:00' },
-  { type: 'E', color: '#EF4444', time: '13:00〜22:00' },
-  { type: 'F', color: '#EC4899', time: '17:00〜22:00' },
-  { type: 'G', color: '#0EA5E9', time: '9:00〜22:00' },
-] as const;
+/** 表示用に先頭0を省く（"08:00" → "8:00"） */
+function trimLeadingZero(time: string): string {
+  return time.startsWith('0') ? time.slice(1) : time;
+}
+
+const SHIFT_TYPES = (Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom' | 'off'>[]).map((type) => ({
+  type,
+  color: SHIFT_COLORS[type],
+  time: `${trimLeadingZero(SHIFT_PRESETS[type].start)}〜${trimLeadingZero(SHIFT_PRESETS[type].end)}`,
+}));
 
 const colorAccent: Record<SectionColor, { bg: string; text: string; light: string; border: string }> = {
   blue:   { bg: 'bg-blue-600',   text: 'text-blue-600',   light: 'bg-blue-50',   border: 'border-blue-200' },
@@ -28,7 +30,7 @@ const staffSections: Section[] = [
     subtitle: '希望シフトを入力して提出する',
     color: 'blue',
     steps: [
-      { text: 'ナビの「シフト申請」をタップして申請ページを開く', note: '提出期間が設定されている月は、自動的にその月に切り替わります' },
+      { text: 'ナビの「申請」をタップして申請ページを開く', note: '提出期間が設定されている月は、自動的にその月に切り替わります' },
       { text: '申請したい日付の行にある「入力」ボタンをタップ' },
       { text: 'シフト種別（A〜G）またはカスタムを選んで「決定」をタップ', note: '「休み / 申請なし」を選ぶとその日の申請を取り消せます' },
       { text: '全ての日程を入力したら、画面下部の「X日分をまとめて提出」をタップ' },
@@ -58,6 +60,25 @@ const staffSections: Section[] = [
       '自分の列は強調表示されます',
     ],
   },
+  {
+    id: 'requests',
+    icon: '📨',
+    title: '調整依頼',
+    subtitle: '管理者からのシフト依頼を確認・応答する',
+    color: 'purple',
+    steps: [
+      { text: 'ナビの「依頼」をタップして依頼ページを開く', note: 'バッジの数字が未対応の依頼件数を表します' },
+      { text: '「未対応」タブで届いている依頼の日付・時間帯を確認する' },
+      { text: '「受ける」をタップすると、その日のシフトが自動的に下書き登録される', note: 'すでにシフトが入っている日は上書き確認が表示されます' },
+      { text: '「断る」をタップすると辞退として記録される（掲示板型は他の人に回ります）' },
+      { text: '対応済みの依頼は「過去の依頼」タブに移動する' },
+    ],
+    tips: [
+      'ログイン時に未対応の依頼があるとポップアップで通知されます',
+      '掲示板型は早い者勝ちです。他の人が先に受けると自動的に締め切られます',
+      '承諾した後に管理者が依頼を取り消した場合も、次回ログイン時に通知されます',
+    ],
+  },
 ];
 
 const adminSections: Section[] = [
@@ -78,6 +99,26 @@ const adminSections: Section[] = [
     tips: [
       '「表形式」はカレンダー全体を俯瞰、「タイムライン」は時間帯ごとの人数確認に向いています',
       '各日付のメモ欄に予定やコメントを記録できます',
+    ],
+  },
+  {
+    id: 'requests',
+    icon: '📨',
+    title: '調整依頼',
+    subtitle: '人手不足の日にスタッフへシフトを依頼する',
+    color: 'green',
+    steps: [
+      { text: '「依頼管理」ページの「+ 依頼を出す」をタップしてモーダルを開く', note: 'タイムラインの赤・黄のコマをタップすると日時が自動入力された状態で開けます' },
+      { text: '「指名型」か「掲示板型」を選ぶ', note: '指名型はスタッフを個別に選択。掲示板型は全員に公開して先着1名が受け取れます' },
+      { text: '対象日・時間帯・メッセージを入力して「依頼を送る」をタップ' },
+      { text: '「募集中」タブで各スタッフの応答状況（✓承諾 / ✗辞退 / …未対応）を確認する' },
+      { text: 'スタッフが承諾すると「承諾済み」タブに移動する' },
+      { text: '「承諾済み」タブの「シフトを確定する」ボタンで下書きシフトを確定する' },
+    ],
+    tips: [
+      'スタッフがログインすると未対応の依頼をポップアップでお知らせします',
+      '承諾済みの依頼を取り消すと、承諾したスタッフへ通知が届きます',
+      '依頼から確定したシフトは「シフト管理」ページでも確認・編集できます',
     ],
   },
   {
@@ -190,12 +231,12 @@ export default function HelpModal({ role, onClose }: Props) {
 
         {/* ヘッダー */}
         <div className="flex items-center gap-3 px-5 pt-4 pb-3 flex-shrink-0">
-          <div className={`w-8 h-8 rounded-xl ${c.bg} flex items-center justify-center text-base flex-shrink-0`}>
-            {section.icon}
+          <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center flex-shrink-0`}>
+            <SectionIcon icon={section.icon} className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-slate-800 text-sm leading-tight truncate">{section.title}</p>
-            <p className="text-[11px] text-slate-400 truncate">{section.subtitle}</p>
+            <p className="text-sm font-semibold text-slate-900 leading-tight truncate">{section.title}</p>
+            <p className="text-[11px] font-medium text-slate-500 truncate">{section.subtitle}</p>
           </div>
           {/* ページ番号 */}
           <span className="text-xs text-slate-400 flex-shrink-0 tabular-nums">{current + 1} / {total}</span>
@@ -230,14 +271,14 @@ export default function HelpModal({ role, onClose }: Props) {
                 <div key={sec.id} className="w-full flex-shrink-0 overflow-y-auto overscroll-contain px-5 pb-4">
                   {/* 画像 */}
                   {sec.image && (
-                    <div className="mb-4 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+                    <div className="mb-4 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
                       <img src={sec.image} alt={sec.title} className="w-full object-cover" draggable={false} />
                     </div>
                   )}
 
                   {/* シフト種別早見表（スタッフの最初のスライドのみ） */}
                   {!isAdmin && idx === 0 && (
-                    <div className="mb-4 bg-slate-50 rounded-2xl p-3">
+                    <div className="mb-4 bg-slate-50 rounded-xl p-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">シフト種別早見表</p>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                         {SHIFT_TYPES.map(({ type, color, time }) => (
@@ -264,7 +305,7 @@ export default function HelpModal({ role, onClose }: Props) {
                           {i + 1}
                         </div>
                         <div className="flex-1">
-                          <p className="text-sm text-slate-700 leading-relaxed">{step.text}</p>
+                          <p className="text-[13px] text-slate-600 leading-relaxed">{step.text}</p>
                           {step.note && (
                             <p className="text-xs text-slate-400 mt-1 pl-2 border-l-2 border-slate-200">{step.note}</p>
                           )}
@@ -275,9 +316,12 @@ export default function HelpModal({ role, onClose }: Props) {
 
                   {/* ヒント */}
                   {sec.tips && sec.tips.length > 0 && (
-                    <div className={`${sc.light} ${sc.border} border rounded-xl p-3`}>
-                      <p className={`text-xs font-bold ${sc.text} mb-1.5 flex items-center gap-1`}>
-                        <span>💡</span> ヒント
+                    <div className={`${sc.light} ${sc.border} border rounded-lg p-3`}>
+                      <p className={`text-xs font-semibold ${sc.text} mb-1.5 flex items-center gap-1`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0012 3z" />
+                        </svg>
+                        ヒント
                       </p>
                       <ul className="space-y-1">
                         {sec.tips.map((tip, i) => (
