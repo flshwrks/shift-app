@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { canAccessAdmin, isHqRole } from '@/lib/types';
-import { HQ_LOGIN, storeLoginPath } from '@/lib/routes';
+import { HQ_LOGIN, HQ_HOME, storeLoginPath } from '@/lib/routes';
 import HelpModal from '@/components/HelpModal';
 import BrandMark from '@/components/BrandMark';
 import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp } from '@/components/icons';
@@ -134,6 +134,18 @@ export default function NavBar() {
             )}
           </div>
           <span className="text-xs text-slate-500 truncate max-w-[80px] flex-shrink-0">{user?.name}</span>
+          {user && isHqRole(user.role) && (
+            // 本部管理者が店舗の管理画面を覗いた後、ログアウト（PIN再入力）せずに
+            // セッションを保ったまま店舗一覧へ戻れるようにする専用リンク。
+            // 「ログアウト」は文字通りセッションを破棄するボタンなので、
+            // 単に本部へ戻りたいだけの場面ではこちらを使う。
+            <Link
+              href={HQ_HOME}
+              className="text-xs px-2.5 h-7 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0 flex items-center"
+            >
+              本部管理へ戻る
+            </Link>
+          )}
           <button
             onClick={() => setShowHelp(true)}
             className="w-7 h-7 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-50 flex items-center justify-center flex-shrink-0 transition-colors"
