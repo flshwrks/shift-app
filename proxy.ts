@@ -27,13 +27,39 @@ function redirect(request: NextRequest, path: string) {
   return NextResponse.redirect(new URL(path, request.url));
 }
 
+// 多店舗対応(2026-08-08)より前のURL。ブックマーク・ホーム画面ショートカット・
+// 過去のLINE/メールで共有されたリンクが実在するため、404で切り捨てず
+// 店舗スコープの新URLへ転送する。セッションが分かればその人の店舗へ、
+// 未ログインや本部管理者(店舗を持たない)は 'main'（初回バックフィルで
+// 作られたデフォルト店舗）へ寄せる。将来的に店舗が増えても、これらの
+// 旧URLはそもそも「店舗が1つしか無かった頃」の名残なので 'main' 固定で問題ない。
+const LEGACY_DEFAULT_SLUG = 'main';
+// 旧 /admin/* 配下のページ名。新 /admin/* は本部専用(login, stores)に
+// 意味が変わっているため、旧ページ名だけを狙い撃ちして転送する
+// （/admin/login・/admin/stores は下のガードにそのまま素通りさせる）。
+const LEGACY_STORE_ADMIN_PAGES = new Set(['schedule', 'requests', 'staff', 'settings', 'survey', 'labor-cost']);
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const raw = request.cookies.get(SESSION_COOKIE.name)?.value;
   const session = raw ? verifySessionCookie(raw) : null;
+  const legacyStoreSlug = session?.storeSlug ?? LEGACY_DEFAULT_SLUG;
+
+  // --- 旧URLからの転送 ---
+  if (pathname === '/login') {
+    return redirect(request, storeLoginPath(legacyStoreSlug));
+  }
+  if (pathname === '/staff' || pathname.startsWith('/staff/')) {
+    return redirect(request, `/s/${legacyStoreSlug}${pathname}`);
+  }
 
   // --- /admin/* : 本部管理者向け（/admin/login は未ログインでアクセスするため除外） ---
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    const segments = pathname.split('/').filter(Boolean); // ['admin', 'schedule', ...]
+    if (segments[1] && LEGACY_STORE_ADMIN_PAGES.has(segments[1])) {
+      return redirect(request, `/s/${legacyStoreSlug}/admin/${segments.slice(1).join('/')}`);
+    }
+
     if (pathname === HQ_LOGIN) return NextResponse.next();
 
     if (!session || !isHqRole(session.role)) {
@@ -90,5 +116,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/s/:path*', '/admin/:path*'],
+  // /login, /staff/:path* は多店舗対応前の旧URL転送のためにマッチさせている
+  matcher: ['/s/:path*', '/admin/:path*', '/login', '/staff/:path*'],
 };
