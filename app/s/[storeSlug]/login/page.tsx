@@ -159,6 +159,15 @@ export default function LoginPage() {
           <p className="text-blue-600 text-sm font-semibold mt-1">{storeName}</p>
           <p className="text-slate-500 text-sm mt-2">名前を選択してください</p>
         </div>
+
+        {/* PIN不要でシフト表だけ見たい人向けの一発リンク（休憩室のタブレット等を想定） */}
+        <Link
+          href={`/s/${storeSlug}/public/schedule`}
+          className="mb-6 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          シフト表を見る（ログイン不要）
+        </Link>
+
         {users.length === 0 ? (
           <p className="text-center text-slate-400 py-8">スタッフが登録されていません</p>
         ) : (
@@ -182,14 +191,6 @@ export default function LoginPage() {
             ))}
           </div>
         )}
-
-        {/* PIN不要でシフト表だけ見たい人向けの一発リンク（休憩室のタブレット等を想定） */}
-        <Link
-          href={`/s/${storeSlug}/public/schedule`}
-          className="mt-5 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          シフト表を見る（ログイン不要）
-        </Link>
 
         <div className="flex justify-end mt-4">
           <button
