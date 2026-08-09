@@ -57,6 +57,64 @@ Tier 1適用直後は、`users` への INSERT/UPDATE/DELETE が anon に開放�
 **教訓**: Postgresの関数にはPUBLICへの暗黙付与があるため、`SECURITY DEFINER` 関数の権限を絞る際は `anon, authenticated` だけでなく **`public` も明示的にrevokeする**こと（`verify_login` はログイン用途で意図的に公開のままにしている＝問題なし）。今後同様のRPCを追加する際は、この点を最初のマイグレーションから含めること。
 
 **残存リスク（今後の課題）**: 同様のパターンを `shifts`（確定操作）・`shift_requests`（取消・確定）・`app_settings`（提出期間・組織名）にも拡大することが望ましい（現状はこれらも行レベルで全開放だが、`users` ほど致命的ではないため優先度を下げている）。
+→ **この残存リスクは 2026-08-08 のマルチ店舗対応（Tier 3）で解消した。後述。**
+
+---
+
+# Tier 3: マルチ店舗対応に伴うRLSの本格化（2026-08-08）
+
+単一店舗から「同一組織の複数店舗＋本部管理」へ拡張するにあたり、Tier 1/2 で残していた「RLSは全テーブル `using (true)` の全開放で、実質的な保護はアプリ層とservice_role経由のAPIにしかない」という状態を解消した。多店舗化すると、この残存リスクが「他店舗のスタッフ名・シフト・時給が見える」という直接的な情報漏洩に変わるため、先送りできなくなった。
+
+## 設計: httpOnly Cookieを維持したままRLSにアイデンティティを渡す
+
+このアプリはSupabase Authを使わず独自のhttpOnly署名Cookieでセッションを管理しているため、RLSからは「誰がアクセスしているか」が全く見えなかった。これがRLSを全開放にせざるを得なかった根本原因。
+
+- ログイン成功時に、Cookieから派生する**短命なSupabase JWT**（`app_role` / `store_id` カスタムクレーム入り）をサーバー側で署名して発行し、`supabase-js` の `accessToken` コールバックに渡す（Supabase公式のサードパーティ認証パターン）。これによりRLSポリシー内の `auth.jwt()` からクレームを読めるようになる
+- **信頼のアンカーは引き続きhttpOnly Cookie**。JWTはそこから都度導出される派生クレデンシャルという位置づけ
+- **JWTはlocalStorageに保存しない**。httpOnly CookieはXSSで読めないが、JWTをlocalStorageに置くと「XSSが一度発火すれば後からいつでも再利用できる」長命の漏洩になる。メモリ変数にのみ保持し、`GET /api/session/token` から取得・45分ごとにリフレッシュすることで、XSS時の被害をTTL内に限定した
+- JWT署名は手書きHS256ではなく `jose` を使用。base64urlパディング・ヘッダーの厳密一致など自前実装が壊れやすい割に検証が難しい領域であり、このプロジェクトは既に認証まわりで2件の実インシデント（固定ソルトSHA-256、PUBLIC権限の見落とし）を起こしているため、3件目のリスクを取らない判断
+
+## 対応した内容
+
+- 全テーブルのRLSを `is_hq_admin() or store_id = jwt_store_id()` ベースの店舗スコープポリシーに差し替え。子テーブル（`shift_request_targets` / `survey_options` / `survey_responses`）は親経由の `exists()` でスコープ
+- `shifts.store_id` は `user_id` から導出する `SECURITY DEFINER` トリガーで**常に上書き**する。クライアントが送った `store_id` を握り潰すことで、他店の `user_id` を推測してINSERTし WITH CHECK をすり抜ける攻撃を構造的に防ぐ（Postgresの仕様上、WITH CHECK は BEFORE ROW トリガー適用後の最終行に対して評価される）
+- 未認証のログイン画面用に `list_login_users(p_store_slug)` / `list_hq_admin_users()` の SECURITY DEFINER RPC を追加。RLS適用後は JWT の無い匿名リクエストで `users` を読めなくなるため
+- `verify_login` の戻り値に `store_id` を追加し、URL上のslugと所属店舗が一致しないログインを `/api/login` で拒否
+
+## Tier 1 の教訓（PUBLICへの暗黙付与）の適用
+
+新規追加した SECURITY DEFINER 関数のうち、意図的に公開するもの（`list_login_users` / `list_hq_admin_users` / `verify_login`）以外は `public, anon, authenticated` から明示的に revoke した。
+
+ただし**RLSヘルパー関数（`jwt_app_role()` / `jwt_store_id()` / `jwt_user_id()` / `is_hq_admin()`）は意図的にPUBLIC実行のまま残している**。RLSの `using` / `with check` 句は問い合わせ元ロールの権限で評価されるため、これらからEXECUTEを剥奪すると全てのポリシー評価が "permission denied for function" で失敗し、行アクセスが完全に壊れる。これらは呼び出し元自身のJWTを読み返すだけで特権的な情報にアクセスしないため、公開実行で問題ない。この判断はマイグレーションSQL内にコメントで残してある。
+
+## 店舗境界の実体はコードにある（重要）
+
+`lib/supabaseAdmin.ts` の service_role クライアントは **RLSを完全にバイパスする**。したがって `app/api/admin/users/*` における「店舗管理者が他店のスタッフを操作できない」という保証は、DBのRLSではなく**アプリコードにしか存在しない**。
+
+- POST: 非hq_adminならボディの `storeId` を完全に無視して `session.storeId` を強制適用
+- PATCH / DELETE: 対象行の `store_id` を先読みし、非hq_adminなら `session.storeId` と一致しない限り403
+- reorder: 各UPDATEに `.eq('store_id', ...)` を追加（対象外の行は0件更新となり安全側に倒れる）
+
+## 統合レビューで発見した問題（修正済み）
+
+並列実装後の統合レビューで、型チェック・ビルドでは検出できない不具合を3件発見して修正した。
+
+1. **旧Cookieによる無限リダイレクトループ**: `verifySessionCookie` が多店舗対応前のCookie（`storeId`/`storeSlug` 無し）に null を補って通す後方互換シムになっていた。これにより店舗ユーザーが「所属店舗が不明なままログイン状態」で通過し、`proxy.ts` が `/s/null/...` へリダイレクトし続けるループと、`store_id` が null のスタッフ作成が起きうる状態だった。**店舗コンテキストの無い店舗ユーザーは正しくスコープしようがない**ため、旧Cookieは無効なセッションとして扱い一度だけ再ログインさせる方針に変更した（hq_admin/developer は本来 `store_id` を持たないロールなので判定から除外）
+2. **`app_settings` の複合PK化タイミング**: 新コードが `onConflict: 'store_id,key'` を指定するため、この一意制約がコードデプロイ前に存在しないと設定保存が一斉に失敗する。バックフィル用マイグレーションに一意インデックスの先行作成を追加した
+3. **共通コンポーネントの店舗フィルタ漏れ**: `LoginNotificationModal` の `shift_requests` への4クエリすべてに店舗フィルタが未適用で、他店舗の調整依頼が通知に混入する状態だった
+
+## ⚠️ 適用手順（順序厳守）
+
+コードとDBの適用順序を誤るとログイン不能になる。詳細は `improvement_list/2026-08-08_multi_store_support.md` を参照。
+
+1. `2026-08-08_multi_store_schema.sql` → `2026-08-08b_multi_store_backfill.sql` を適用（RLSはまだ開放のままなので現行コードが無改修で動作）
+2. 既存adminの1名を `hq_admin` に昇格（手動SQL）
+3. `SUPABASE_JWT_SECRET`（SupabaseのLegacy JWT Secret）をVercel・`.env.local` に設定
+4. コード一式をデプロイし、発行されるJWTのクレームを確認
+5. `2026-08-08c_multi_store_rls.sql` → `2026-08-08d_multi_store_not_null.sql` を**連続して**適用
+6. 2店舗目を作るのは 5 の完了後（それ以前は `app_settings` の主キーが `key` 単体のままで店舗間のキー衝突が起きうる）
+
+**残存リスク（今後の課題）**: 「スタッフが他人の確定済みシフトを直接更新できる」という粒度の制限は今回も未実施（店舗スコープ内では従来通りの寛容な書込み権限）。`2026-08-08c_multi_store_rls.sql` 内に、WITH CHECK に `(jwt_app_role()='staff' and user_id=jwt_user_id() and status='draft')` の分岐を足す方針をコメントで残してある。
 
 ## その他の監査結果（機能・UX・保守性）
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/session';
 import { createAdminClient } from '@/lib/supabaseAdmin';
+import { isHqRole } from '@/lib/types';
 
 interface ReorderItem {
   id: string;
@@ -22,11 +23,22 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
   }
 
+  // 店舗管理者が自店以外のidを紛れ込ませて他店の並びを書き換えられないよう、
+  // 各UPDATEに自店のstore_idを条件として付ける。hq_admin/developerは全店舗を
+  // 横断管理できる権限なのでこの絞り込みを省く。
+  const admin = createAdminClient();
+  const scopeToOwnStore = !isHqRole(session.role);
+  if (scopeToOwnStore && !session.storeId) {
+    return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+  }
+
   // upsert にすると、name等のNOT NULL列を含まないINSERT扱いになりPostgresに拒否されるため
   // （ON CONFLICT DO UPDATE 経路でもINSERT側のNOT NULL制約は検証される）、行ごとの更新にする
-  const admin = createAdminClient();
   const results = await Promise.all(
-    (items as ReorderItem[]).map(it => admin.from('users').update({ display_order: it.display_order }).eq('id', it.id))
+    (items as ReorderItem[]).map(it => {
+      const query = admin.from('users').update({ display_order: it.display_order }).eq('id', it.id);
+      return scopeToOwnStore ? query.eq('store_id', session.storeId as string) : query;
+    })
   );
   const failed = results.find(r => r.error);
   if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 400 });

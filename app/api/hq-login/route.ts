@@ -11,12 +11,13 @@ interface VerifyLoginRow {
   store_id: string | null;
 }
 
+// 本部管理者専用のログイン入口。店舗スタッフ/店舗管理者は /api/login を使う
+// （store_id突き合わせが無いため、hq_admin以外をここで通してはならない）。
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const userId = typeof body?.userId === 'string' ? body.userId : '';
   const pin = typeof body?.pin === 'string' ? body.pin : '';
-  const storeSlug = typeof body?.storeSlug === 'string' ? body.storeSlug : '';
-  if (!userId || !pin || !storeSlug) {
+  if (!userId || !pin) {
     return NextResponse.json({ ok: false, error: 'invalid_request' }, { status: 400 });
   }
 
@@ -28,28 +29,11 @@ export async function POST(request: Request) {
     // ロックアウト等、verify_login 側で raise exception したケース
     return NextResponse.json({ ok: false, error: error.message }, { status: 429 });
   }
-  if (!data) {
-    return NextResponse.json({ ok: false, error: 'invalid_pin' }, { status: 401 });
-  }
-  // 本部管理者はこの入口を使えない（専用の /api/hq-login を使う）。
-  // 存在有無やroleを漏らさないよう、PIN不一致と同じエラーコードにする。
-  if (data.role === 'hq_admin') {
+  if (!data || data.role !== 'hq_admin') {
     return NextResponse.json({ ok: false, error: 'invalid_pin' }, { status: 401 });
   }
 
-  // URL上のstoreSlugから引いたstores.idと、本人の所属店舗が一致するか確認する。
-  // これが無いと、他店舗のURL(/s/他店slug/login)から自分のID・PINでログインでき、
-  // セッションに紛れ込んだstoreSlugを起点に他店の画面へ遷移できてしまう。
-  const { data: store } = await supabase
-    .from('stores')
-    .select('id')
-    .eq('slug', storeSlug)
-    .maybeSingle<{ id: string }>();
-  if (!store || data.store_id !== store.id) {
-    return NextResponse.json({ ok: false, error: 'invalid_store' }, { status: 401 });
-  }
-
-  const user: SessionUser = { id: data.id, name: data.name, role: data.role, storeId: data.store_id, storeSlug };
+  const user: SessionUser = { id: data.id, name: data.name, role: data.role, storeId: null, storeSlug: null };
   const supabaseToken = await signJwtForSession(user);
   const res = NextResponse.json({ ok: true, user, supabaseToken });
   res.cookies.set(SESSION_COOKIE.name, buildSessionCookieValue(user), {

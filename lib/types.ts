@@ -1,4 +1,11 @@
-export type UserRole = 'admin' | 'staff' | 'developer';
+export type UserRole = 'hq_admin' | 'admin' | 'staff' | 'developer';
+
+export interface Store {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+}
 
 export interface User {
   id: string;
@@ -6,6 +13,7 @@ export interface User {
   role: UserRole;
   created_at: string;
   display_order?: number;
+  store_id?: string | null;
 }
 
 export type ShiftType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'custom' | 'off';
@@ -23,12 +31,25 @@ export interface Shift {
   created_at: string;
   updated_at: string;
   user?: User;
+  store_id?: string | null;
 }
 
 export interface SessionUser {
   id: string;
   name: string;
   role: UserRole;
+  storeId: string | null; // hq_admin/developer は null
+  storeSlug: string | null; // 同上
+}
+
+/** 管理画面（店舗の管理者エリア）にアクセスできるか */
+export function canAccessAdmin(role: UserRole): boolean {
+  return role === 'admin' || role === 'hq_admin' || role === 'developer';
+}
+
+/** 全店舗を横断できる本部権限か */
+export function isHqRole(role: UserRole): boolean {
+  return role === 'hq_admin' || role === 'developer';
 }
 
 export const SHIFT_PRESETS: Record<Exclude<ShiftType, 'custom' | 'off'>, { start: string; end: string; label: string }> = {

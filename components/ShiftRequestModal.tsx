@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useStore } from '@/lib/store';
 import type { User, ShiftType, RequestType } from '@/lib/types';
 import { SHIFT_PRESETS } from '@/lib/types';
 
@@ -17,6 +18,7 @@ interface Props {
 
 export default function ShiftRequestModal({ users, defaultDate, defaultStartTime, defaultEndTime, createdBy, onClose, onSaved }: Props) {
   useBodyScrollLock();
+  const { storeId } = useStore();
 
   const hasCustomTime = !!defaultStartTime && !!defaultEndTime;
   const [requestType, setRequestType] = useState<RequestType>('targeted');
@@ -53,6 +55,7 @@ export default function ShiftRequestModal({ users, defaultDate, defaultStartTime
     const { data: reqData, error: reqErr } = await supabase
       .from('shift_requests')
       .insert({
+        store_id: storeId,
         date,
         start_time: startTime,
         end_time: endTime,

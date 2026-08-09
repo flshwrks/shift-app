@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useStoreOptional } from '@/lib/store';
 
 interface PendingRequest {
   id: string; date: string; start_time: string; end_time: string; message: string; request_type: string;
@@ -25,10 +26,13 @@ function formatDate(dateStr: string) {
 
 export default function LoginNotificationModal() {
   const { user } = useAuth();
+  // 店舗が特定できない文脈（本部レイアウト等）では通知を出しようがないので何も描画しない
+  const store = useStoreOptional();
+  const storeId = store?.storeId ?? null;
   const [queue, setQueue] = useState<NotifScreen[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !storeId) return;
     const sessionKey = `login_notif_shown_${user.id}`;
     if (sessionStorage.getItem(sessionKey)) return;
     sessionStorage.setItem(sessionKey, '1');
@@ -54,6 +58,7 @@ export default function LoginNotificationModal() {
             .from('shift_requests')
             .select('id, date, start_time, end_time')
             .in('id', acceptedIds)
+            .eq('store_id', storeId)
             .eq('status', 'cancelled');
 
           if (cancelledReqs && cancelledReqs.length > 0) {
@@ -72,10 +77,11 @@ export default function LoginNotificationModal() {
 
         const [{ data: targetedReqs }, { data: openReqs }] = await Promise.all([
           pendingIds.length > 0
-            ? supabase.from('shift_requests').select('id, date, start_time, end_time, message, request_type').in('id', pendingIds).eq('status', 'open')
+            ? supabase.from('shift_requests').select('id, date, start_time, end_time, message, request_type').in('id', pendingIds).eq('store_id', storeId).eq('status', 'open')
             : Promise.resolve({ data: [] as PendingRequest[] }),
           supabase.from('shift_requests')
             .select('id, date, start_time, end_time, message, request_type, targets:shift_request_targets(user_id)')
+            .eq('store_id', storeId)
             .eq('request_type', 'open')
             .eq('status', 'open'),
         ]);
@@ -100,6 +106,7 @@ export default function LoginNotificationModal() {
         const { data: fulfilledReqs } = await supabase
           .from('shift_requests')
           .select('id, date, start_time, end_time, targets:shift_request_targets(status, user:users(name))')
+          .eq('store_id', storeId)
           .eq('status', 'fulfilled');
 
         const fulfilled: FulfilledRequest[] = (fulfilledReqs ?? [])
@@ -118,7 +125,7 @@ export default function LoginNotificationModal() {
     };
 
     build();
-  }, [user]);
+  }, [user, storeId]);
 
   const current = queue[0] ?? null;
   if (!current) return null;

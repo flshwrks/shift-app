@@ -3,46 +3,43 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { canAccessAdmin } from '@/lib/types';
 import HelpModal from '@/components/HelpModal';
 import BrandMark from '@/components/BrandMark';
 import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp } from '@/components/icons';
 
+// パス断片のみを持たせ、レンダリング時に店舗プレフィックス（/s/[storeSlug]）を付ける。
+// こうすることでプレフィックスの付け方を1箇所（buildHref）に集約できる。
 const staffNav = [
-  { href: '/staff/shifts', label: 'シフト申請', shortLabel: '申請', Icon: IconPencil },
-  { href: '/staff/schedule', label: '確認', shortLabel: '確認', Icon: IconCalendar },
-  { href: '/staff/requests', label: '依頼', shortLabel: '依頼', Icon: IconInbox },
+  { path: '/staff/shifts', label: 'シフト申請', shortLabel: '申請', Icon: IconPencil },
+  { path: '/staff/schedule', label: '確認', shortLabel: '確認', Icon: IconCalendar },
+  { path: '/staff/requests', label: '依頼', shortLabel: '依頼', Icon: IconInbox },
 ];
 
 const adminNav = [
-  { href: '/admin/schedule', label: 'シフト管理', shortLabel: 'シフト', Icon: IconCalendar },
-  { href: '/admin/requests', label: '依頼管理', shortLabel: '依頼', Icon: IconInbox },
-  { href: '/admin/staff', label: 'スタッフ', shortLabel: 'スタッフ', Icon: IconUsers },
-  { href: '/admin/settings', label: '設定', shortLabel: '設定', Icon: IconSettings },
+  { path: '/admin/schedule', label: 'シフト管理', shortLabel: 'シフト', Icon: IconCalendar },
+  { path: '/admin/requests', label: '依頼管理', shortLabel: '依頼', Icon: IconInbox },
+  { path: '/admin/staff', label: 'スタッフ', shortLabel: 'スタッフ', Icon: IconUsers },
+  { path: '/admin/settings', label: '設定', shortLabel: '設定', Icon: IconSettings },
 ];
 
 export default function NavBar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const [orgName, setOrgName] = useState('');
+  // NavBar は /s/[storeSlug]/ 配下でのみ使われる想定だが、Provider外で呼ばれても
+  // クラッシュしないよう useStoreOptional を使う（storeSlug が無ければリンクは素のパスにフォールバック）。
+  const store = useStoreOptional();
+  const storeSlug = store?.storeSlug ?? null;
+  const storeId = store?.storeId ?? null;
+  const orgName = store?.storeName ?? '';
   const [hasDraft, setHasDraft] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
-  useEffect(() => {
-    supabase.from('app_settings').select('value').eq('key', 'org_name').single()
-      .then(({ data }) => { if (data?.value) setOrgName(data.value); });
-
-    const channel = supabase.channel('navbar-settings')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, ({ new: row }) => {
-        if ((row as { key: string; value: string }).key === 'org_name') {
-          setOrgName((row as { key: string; value: string }).value ?? '');
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+  const buildHref = (path: string) => (storeSlug ? `/s/${storeSlug}${path}` : path);
 
   useEffect(() => {
     if (!user || user.role !== 'staff') return;
@@ -56,16 +53,19 @@ export default function NavBar() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !storeId) return;
 
     const fetchPendingCount = async () => {
-      if (user.role === 'admin' || user.role === 'developer') {
+      if (canAccessAdmin(user.role)) {
         const { count } = await supabase
           .from('shift_requests')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'open');
+          .eq('status', 'open')
+          .eq('store_id', storeId);
         setPendingRequestCount(count ?? 0);
       } else {
+        // shift_request_targets には store_id 列が無いためフィルタ不要
+        // （user_id が既に自店のスタッフに一意に紐づくため自然にスコープされる）
         const [{ data: targeted }, { data: openReqs }] = await Promise.all([
           supabase
             .from('shift_request_targets')
@@ -76,7 +76,8 @@ export default function NavBar() {
             .from('shift_requests')
             .select('id, targets:shift_request_targets(user_id, status)')
             .eq('request_type', 'open')
-            .eq('status', 'open'),
+            .eq('status', 'open')
+            .eq('store_id', storeId),
         ]);
 
         const openUnanswered = (openReqs ?? []).filter(r => {
@@ -90,25 +91,25 @@ export default function NavBar() {
 
     fetchPendingCount();
 
-    const channel = supabase.channel('navbar-requests')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_requests' }, fetchPendingCount)
+    const channel = supabase.channel(`navbar-requests-${storeId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_requests', filter: `store_id=eq.${storeId}` }, fetchPendingCount)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_request_targets' }, fetchPendingCount)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, storeId]);
 
-  const navItems = (user?.role === 'admin' || user?.role === 'developer') ? adminNav : staffNav as typeof adminNav;
+  const navItems = (user && canAccessAdmin(user.role)) ? adminNav : staffNav as typeof adminNav;
 
-  const getBadges = (href: string, active: boolean) => ({
-    isDraftBadge: hasDraft && href === '/staff/shifts' && !active,
-    isRequestBadge: pendingRequestCount > 0 && (href === '/staff/requests' || href === '/admin/requests') && !active,
+  const getBadges = (path: string, active: boolean) => ({
+    isDraftBadge: hasDraft && path === '/staff/shifts' && !active,
+    isRequestBadge: pendingRequestCount > 0 && (path === '/staff/requests' || path === '/admin/requests') && !active,
   });
 
   const handleLogout = () => {
     if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
     fetch('/api/logout', { method: 'POST' }).catch(() => {});
     logout();
-    router.replace('/login');
+    router.replace(storeSlug ? `/s/${storeSlug}/login` : '/admin/login');
   };
 
   return (
@@ -146,13 +147,14 @@ export default function NavBar() {
       {/* ボトムナビ（スマホ用） */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex pb-[env(safe-area-inset-bottom)] sm:hidden">
         {navItems.map(item => {
-          const active = pathname === item.href;
-          const { isDraftBadge, isRequestBadge } = getBadges(item.href, active);
+          const href = buildHref(item.path);
+          const active = pathname === href;
+          const { isDraftBadge, isRequestBadge } = getBadges(item.path, active);
           const Icon = item.Icon;
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={item.path}
+              href={href}
               className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[11px] font-medium transition-colors relative ${
                 active ? 'text-blue-600' : 'text-slate-500'
               }`}
@@ -179,13 +181,15 @@ export default function NavBar() {
       <div className="hidden sm:block bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 flex gap-1 py-1">
           {navItems.map(item => {
-            const { isDraftBadge, isRequestBadge } = getBadges(item.href, pathname === item.href);
+            const href = buildHref(item.path);
+            const active = pathname === href;
+            const { isDraftBadge, isRequestBadge } = getBadges(item.path, active);
             return (
               <Link
-                key={item.href}
-                href={item.href}
+                key={item.path}
+                href={href}
                 className={`relative px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                  pathname === item.href
+                  active
                     ? 'text-blue-700 font-semibold border-b-2 border-blue-600'
                     : 'text-slate-500 hover:text-slate-800 border-b-2 border-transparent'
                 }`}
