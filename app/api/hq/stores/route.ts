@@ -59,11 +59,16 @@ export async function PATCH(request: Request) {
   if (!SLUG_PATTERN.test(slug)) return NextResponse.json({ error: SLUG_ERROR }, { status: 400 });
 
   const admin = createAdminClient();
-  const { error } = await admin.from('stores').update({ slug, name }).eq('id', id);
+  // .select()を付けずにupdateすると、対象idが1件も無くてもerrorはnullのまま返ってくる
+  // （0件更新は失敗ではなく「該当なし」として扱われるため）。存在しないidを指定した場合に
+  // 「保存はできたが実際には何も変わっていない」という無言の失敗になるのを防ぐため、
+  // 更新できた行を明示的に受け取って件数を確認する。
+  const { data, error } = await admin.from('stores').update({ slug, name }).eq('id', id).select('id');
   if (error) {
     const message = error.message.includes('unique') ? 'この店舗IDは既に使用されています' : error.message;
     return NextResponse.json({ error: message }, { status: 400 });
   }
+  if (!data?.length) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 });
 
   return NextResponse.json({ ok: true });
 }
