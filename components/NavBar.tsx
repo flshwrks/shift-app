@@ -5,7 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { canAccessAdmin } from '@/lib/types';
+import { canAccessAdmin, isHqRole } from '@/lib/types';
+import { HQ_LOGIN, storeLoginPath } from '@/lib/routes';
 import HelpModal from '@/components/HelpModal';
 import BrandMark from '@/components/BrandMark';
 import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp } from '@/components/icons';
@@ -108,8 +109,14 @@ export default function NavBar() {
   const handleLogout = () => {
     if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
     fetch('/api/logout', { method: 'POST' }).catch(() => {});
+    // 本部管理者は店舗の管理画面(/s/[storeSlug]/admin/*)を横断的に閲覧できるため、
+    // storeSlugの有無だけで判定すると「本部管理者が今見ている店舗のログイン画面」に
+    // 送られてしまう。ロールを先に見て、本部管理者は必ず本部ログインへ戻す。
+    const destination = user && isHqRole(user.role)
+      ? HQ_LOGIN
+      : storeSlug ? storeLoginPath(storeSlug) : HQ_LOGIN;
     logout();
-    router.replace(storeSlug ? `/s/${storeSlug}/login` : '/admin/login');
+    router.replace(destination);
   };
 
   return (
