@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
@@ -181,6 +182,15 @@ export default function LoginPage() {
             ))}
           </div>
         )}
+
+        {/* PIN不要でシフト表だけ見たい人向けの一発リンク（休憩室のタブレット等を想定） */}
+        <Link
+          href={`/s/${storeSlug}/public/schedule`}
+          className="mt-5 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          シフト表を見る（ログイン不要）
+        </Link>
+
         <div className="flex justify-end mt-4">
           <button
             onClick={() => { setDevMode(true); setPin(''); setError(''); }}

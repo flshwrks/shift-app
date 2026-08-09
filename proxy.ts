@@ -75,8 +75,8 @@ export function proxy(request: NextRequest) {
     const area = segments[2]; // 'login' | 'admin' | 'staff'
     if (!slug) return NextResponse.next();
 
-    // ログイン画面は未ログインでアクセスする画面のためガードしない
-    if (area === 'login') return NextResponse.next();
+    // ログイン画面・公開シフト閲覧(/public/*)は未ログインでアクセスする画面のためガードしない
+    if (area === 'login' || area === 'public') return NextResponse.next();
 
     if (!session) {
       return redirect(request, storeLoginPath(slug));

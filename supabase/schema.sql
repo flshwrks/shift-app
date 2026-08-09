@@ -508,3 +508,29 @@ create policy "survey_responses_all" on public.survey_responses
         and (public.is_hq_admin() or s.store_id = public.jwt_store_id())
     )
   );
+
+-- 店舗ログイン画面から1タップで見られる、ログイン不要のシフト閲覧用RPC。
+-- コメント欄は含めない（私的なメモが不特定多数に見えるのを避けるため）。
+-- 直接のテーブルアクセスは引き続きRLSでブロックされたまま。
+create or replace function public.get_public_shifts(p_store_slug text, p_start date, p_end date)
+returns table(
+  id uuid,
+  user_id uuid,
+  date date,
+  shift_type text,
+  start_time text,
+  end_time text,
+  status text
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select s.id, s.user_id, s.date, s.shift_type, s.start_time, s.end_time, s.status
+  from public.shifts s
+  join public.stores st on st.id = s.store_id
+  where st.slug = p_store_slug
+    and s.date between p_start and p_end;
+$$;
+
+grant execute on function public.get_public_shifts(text, date, date) to anon, authenticated;

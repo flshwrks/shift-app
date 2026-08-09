@@ -76,10 +76,15 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
   // 今日ハイライトは閲覧者の文脈情報であり、共有用の出力画像には含めない
   const todayKey = exportMode ? '' : formatDate(new Date());
 
-  const dayCounts: Record<string, number> = {};
-  days.forEach((d) => { dayCounts[formatDate(d)] = 0; });
+  // 日ごとの実働時間合計（休みを除く各シフトのnetWorkMinutesを合算）。
+  // 「その日に何人出勤しているか」より「その日どれだけ稼働しているか」の方が
+  // 人件費・繁閑の把握に直結するため、単純な出勤人数ではなく時間で表示する。
+  const dayMinutes: Record<string, number> = {};
+  days.forEach((d) => { dayMinutes[formatDate(d)] = 0; });
   shifts.forEach((s) => {
-    if (s.shift_type !== 'off' && dayCounts[s.date] !== undefined) dayCounts[s.date]++;
+    if (s.shift_type !== 'off' && dayMinutes[s.date] !== undefined) {
+      dayMinutes[s.date] += netWorkMinutes(s.start_time, s.end_time);
+    }
   });
 
   return (
@@ -141,19 +146,19 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
               );
             })}
           </tr>
-          {/* 出勤人数行 */}
+          {/* 日ごと実働時間行 */}
           <tr className="bg-white border-b border-slate-200">
             <th className="sticky left-0 bg-white px-4 py-1 text-left text-[10px] font-medium text-slate-400 border-r border-slate-200 z-10 whitespace-nowrap">
-              出勤
+              実働時間
             </th>
             {isAdmin && <td className="border-r border-slate-100" />}
             {days.map((d) => {
               const key = formatDate(d);
-              const count = dayCounts[key] ?? 0;
+              const minutes = dayMinutes[key] ?? 0;
               return (
                 <td key={key} className="px-1 py-1 border-r border-slate-100 min-w-[64px]">
-                  <div className={`text-[11px] tabular-nums text-center ${count === 0 ? 'text-rose-500 font-semibold' : 'text-slate-600'}`}>
-                    {count}
+                  <div className={`text-[11px] tabular-nums text-center ${minutes === 0 ? 'text-rose-500 font-semibold' : 'text-slate-600'}`}>
+                    {formatTotalHours(minutes)}
                   </div>
                 </td>
               );
