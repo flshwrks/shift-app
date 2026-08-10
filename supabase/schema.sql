@@ -21,6 +21,10 @@ create extension if not exists pgcrypto;
 -- ============================================================
 -- 店舗テーブル（マルチ店舗対応）
 -- ============================================================
+-- ★在庫管理アプリ(inventory-app)が依存しています★
+-- 在庫アプリは stores(id, slug, name) を読みます。列を消す・改名すると全画面が出なくなります。
+-- 変更したら inventory-app 側で npm run check:contract を回すこと。
+-- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
 create table if not exists public.stores (
   id uuid default gen_random_uuid() primary key,
   -- slug は URL (/s/[storeSlug]/...) に現れる店舗識別子。英数字とハイフンのみ、
@@ -43,6 +47,10 @@ create policy "stores_select" on public.stores for select using (true);
 revoke insert, update, delete on public.stores from anon, authenticated;
 
 -- ユーザーテーブル
+-- ★在庫管理アプリ(inventory-app)が依存しています★
+-- 在庫アプリは users(id, name, role, store_id) を読みます。列を消す・改名すると記録が一切できなくなります。
+-- 変更したら inventory-app 側で npm run check:contract を回すこと。
+-- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
 create table if not exists public.users (
   id uuid default gen_random_uuid() primary key,
   name text not null,
@@ -78,6 +86,10 @@ create unique index if not exists users_name_null_store_uidx on public.users(nam
 -- 暗黙付与も含めてrevokeする」という教訓は機微データにアクセスする関数向けの指針であり、
 -- 自分自身のJWTを読むだけのこれらの関数には当てはまらない）。
 -- ============================================================
+-- ★在庫管理アプリ(inventory-app)が依存しています★
+-- この直後のRLSヘルパー4関数は在庫アプリのポリシーでも使われます。★PUBLIC実行権限をrevokeすると両アプリの全ポリシー評価が落ちます★
+-- 変更したら inventory-app 側で npm run check:contract を回すこと。
+-- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
 create or replace function public.jwt_app_role()
 returns text
 language sql
@@ -253,6 +265,10 @@ revoke insert, update, delete on public.users from anon, authenticated;
 -- PIN検証RPC（bcrypt比較 + 失敗ロックアウト。詳細は migrations/2026-07-25_security_hardening.sql）
 -- 戻り値の store_id は、呼び出し側が「URLのstoreSlugと実際の所属店舗が一致するか」
 -- 「hq_adminが一般ログイン入口を使っていないか」を判定するために使う
+-- ★在庫管理アプリ(inventory-app)が依存しています★
+-- 在庫アプリのログインもこの関数を呼びます。★戻り値の store_id を落とすと全員ログイン不可になります★
+-- 変更したら inventory-app 側で npm run check:contract を回すこと。
+-- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
 create or replace function public.verify_login(p_user_id uuid, p_pin text)
 returns table(id uuid, name text, role text, store_id uuid)
 language plpgsql
@@ -287,6 +303,10 @@ grant execute on function public.verify_login(uuid, text) to anon, authenticated
 -- 未認証ログイン画面用のRPC（SECURITY DEFINER。usersのRLSより広い範囲を
 -- 読む必要があるため、意図的に公開する）
 -- /s/[storeSlug]/login が、指定店舗の admin/staff 一覧をログイン前に表示するために使う
+-- ★在庫管理アプリ(inventory-app)が依存しています★
+-- 在庫アプリのログイン画面もこの関数を呼びます。★消す・改名すると全員ログイン不可になります★
+-- 変更したら inventory-app 側で npm run check:contract を回すこと。
+-- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
 create or replace function public.list_login_users(p_store_slug text)
 returns table(id uuid, name text, role text, display_order int)
 language sql
