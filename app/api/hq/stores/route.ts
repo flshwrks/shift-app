@@ -94,6 +94,33 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'この店舗にはスタッフが登録されているため削除できません' }, { status: 400 });
   }
 
+  // このDBは在庫管理アプリ(inventory-app)と共有しており、inv_* テーブルも store_id で
+  // この店舗を参照している。スタッフを先に消した空の店舗でも在庫データは残るため、
+  // ここで止めないと外部キー違反の生のPostgresエラーが画面に出る。
+  // 在庫の履歴を店舗削除で暗黙に消すのは許容できないので cascade にはせず、
+  // 「在庫データが残っている店舗は消せない」という制約にしている。
+  for (const [table, label] of [
+    ['inv_items', '品目'],
+    ['inv_stock_transactions', '在庫記録'],
+  ] as const) {
+    const { count: invCount, error: invError } = await admin
+      .from(table)
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', id);
+    // 在庫アプリのマイグレーション未適用の環境ではテーブル自体が無い。
+    // その場合は在庫データも存在しないので、チェックを飛ばして削除を続行する
+    if (invError) {
+      if (!/does not exist|schema cache/i.test(invError.message)) {
+        return NextResponse.json({ error: invError.message }, { status: 400 });
+      }
+    } else if ((invCount ?? 0) > 0) {
+      return NextResponse.json(
+        { error: `この店舗には在庫管理アプリの${label}が登録されているため削除できません` },
+        { status: 400 },
+      );
+    }
+  }
+
   const { error } = await admin.from('stores').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 

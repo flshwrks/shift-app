@@ -5,6 +5,15 @@
 -- supabase/migrations/ 配下のファイルを日付順にすべて適用してください
 -- （2026-07-25_security_hardening.sql 〜 2026-08-08d_multi_store_not_null.sql）。
 -- 詳細な経緯・残存リスクは docs/SECURITY.md を参照。
+--
+-- ★このDBは在庫管理アプリ(inventory-app)と共有しています★（2026-08-10〜）
+-- 実DBには本ファイルに載っていない `inv_*` のテーブル・ビュー・関数が存在します。
+-- それらは inventory-app リポジトリ（~/.claude/在庫管理アプリ/inventory-app）の
+-- supabase/schema.sql が所有しており、本ファイルには含めません。
+-- このファイルだけでDBを再構築すると在庫データの入れ物が欠落するので、
+-- 再構築時は inventory-app 側のマイグレーションもあわせて適用してください。
+-- 在庫アプリは users / stores / jwt_*() / is_hq_admin() を参照するだけで、
+-- 本ファイルが定義するオブジェクトを変更しません（依存の向きは一方向）。
 
 -- pgcrypto（bcryptによるPINハッシュ化・gen_random_uuid()に使用）
 create extension if not exists pgcrypto;
