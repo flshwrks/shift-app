@@ -121,14 +121,16 @@ export default function NavBar() {
 
   return (
     <>
-      <header className="bg-white/85 backdrop-blur border-b border-slate-200/80 sticky top-0 z-40">
+      {/* ヘッダーの罫は太罫（slate-300 = rule-2）。在庫管理アプリと同じ重みにしておかないと、
+          2つのアプリを行き来したときに「別のサービス」に見える */}
+      <header className="bg-white/90 backdrop-blur border-b border-slate-300 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 flex items-center h-[52px] gap-2">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <BrandMark size="sm" />
             <span className="text-[13px] font-semibold text-slate-900 whitespace-nowrap">シフト管理</span>
             {orgName && (
               <>
-                <span className="text-slate-200 text-sm">|</span>
+                <span className="text-slate-300 text-sm">|</span>
                 <span className="text-[13px] text-slate-500 truncate">{orgName}</span>
               </>
             )}
@@ -141,14 +143,14 @@ export default function NavBar() {
             // 単に本部へ戻りたいだけの場面ではこちらを使う。
             <Link
               href={HQ_HOME}
-              className="text-xs px-2.5 h-7 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0 flex items-center"
+              className="text-xs px-2.5 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0 flex items-center"
             >
               本部管理へ戻る
             </Link>
           )}
           <button
             onClick={() => setShowHelp(true)}
-            className="w-7 h-7 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-50 flex items-center justify-center flex-shrink-0 transition-colors"
+            className="w-7 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center justify-center flex-shrink-0 transition-colors"
             title="使い方"
             aria-label="使い方"
           >
@@ -156,7 +158,7 @@ export default function NavBar() {
           </button>
           <button
             onClick={handleLogout}
-            className="text-xs px-2.5 h-7 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
+            className="text-xs px-2.5 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
           >
             ログアウト
           </button>
@@ -164,7 +166,7 @@ export default function NavBar() {
       </header>
 
       {/* ボトムナビ（スマホ用） */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex pb-[env(safe-area-inset-bottom)] sm:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-300 flex pb-[env(safe-area-inset-bottom)] sm:hidden">
         {navItems.map(item => {
           const href = buildHref(item.path);
           const active = pathname === href;

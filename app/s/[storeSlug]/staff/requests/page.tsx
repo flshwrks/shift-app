@@ -253,7 +253,7 @@ export default function StaffRequestsPage() {
             const isFulfilledByOther = req.status === 'fulfilled' && req.myTarget?.status !== 'accepted';
 
             return (
-              <div key={req.id} className={`bg-white rounded-xl border shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-4 ${isFulfilledByOther ? 'border-slate-100' : 'border-slate-200'}`}>
+              <div key={req.id} className={`bg-white rounded-xl border p-4 ${isFulfilledByOther ? 'border-slate-100' : 'border-slate-200'}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-[10px] px-1.5 py-px rounded font-medium border ${req.request_type === 'open' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-violet-50 text-violet-700 border-violet-200'}`}>
                     {req.request_type === 'open' ? '掲示板' : '指名'}

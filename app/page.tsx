@@ -23,7 +23,7 @@ export default function Home() {
   if (!isLoading && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-md text-center">
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-md text-center">
           <div className="mx-auto mb-4 w-fit">
             <BrandMark size="lg" />
           </div>

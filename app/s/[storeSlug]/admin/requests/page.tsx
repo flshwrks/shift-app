@@ -181,7 +181,7 @@ export default function AdminRequestsPage() {
             const isConfirmed = acceptedShift?.status === 'confirmed';
 
             return (
-              <div key={req.id} className={`bg-white rounded-xl border shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-4 ${isConfirmed ? 'border-emerald-200' : 'border-slate-200'}`}>
+              <div key={req.id} className={`bg-white rounded-xl border p-4 ${isConfirmed ? 'border-emerald-200' : 'border-slate-200'}`}>
                 {/* カードヘッダー */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex-1 min-w-0">

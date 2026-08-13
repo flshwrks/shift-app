@@ -88,7 +88,7 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
   });
 
   return (
-    <div ref={ref} className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+    <div ref={ref} className="overflow-auto rounded-xl border border-slate-200 bg-white">
       <table className="border-collapse text-xs min-w-full">
         <thead>
           {/* 日付行 */}

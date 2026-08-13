@@ -398,15 +398,15 @@ export default function AdminSchedulePage() {
       )}
 
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3">
           <p className="text-[11px] font-medium text-slate-500">申請数</p>
           <p className="text-2xl font-semibold tabular-nums text-slate-900">{shifts.length}</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3">
           <p className="text-[11px] font-medium text-slate-500">未確定</p>
           <p className="text-2xl font-semibold tabular-nums text-amber-600">{draftCount}</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3">
           <p className="text-[11px] font-medium text-slate-500">確定済み</p>
           <p className="text-2xl font-semibold tabular-nums text-emerald-600">{shifts.length - draftCount}</p>
         </div>

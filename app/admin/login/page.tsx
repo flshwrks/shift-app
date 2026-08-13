@@ -65,7 +65,7 @@ export default function AdminLoginPage() {
   if (selected) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className={`bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
+        <div className={`bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
           <button
             onClick={() => { setSelected(null); setPin(''); setError(''); }}
             className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1 rounded-md"
@@ -92,7 +92,7 @@ export default function AdminLoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
-      <div className="bg-white rounded-2xl shadow-[0_1px_3px_rgba(16,24,40,0.06)] border border-slate-200 p-8 w-full max-w-md">
+      <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 w-fit">
             <BrandMark size="lg" />

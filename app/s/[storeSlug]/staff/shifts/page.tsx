@@ -462,7 +462,7 @@ export default function ShiftsPage() {
 
       {/* 月間サマリー */}
       {hasSummary && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3 mb-4 grid grid-cols-3 divide-x divide-slate-100">
+        <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4 grid grid-cols-3 divide-x divide-slate-100">
           <div className="flex flex-col items-center gap-0.5">
             <span className="text-xl font-bold text-slate-800 tabular-nums">{monthSummary.workDays}日</span>
             <span className="text-[11px] font-medium text-slate-500">出勤日数</span>
@@ -480,7 +480,7 @@ export default function ShiftsPage() {
       )}
 
       {/* シフト凡例 */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-3 mb-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4">
         <p className="text-[11px] font-medium text-slate-500 mb-2">シフト種別</p>
         <div className="grid grid-cols-3 gap-1.5">
           {SHIFT_LIST.map(type => {

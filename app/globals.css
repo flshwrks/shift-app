@@ -1,18 +1,146 @@
 @import "tailwindcss";
 
-:root {
-  --background: #F6F7F9;
-  --foreground: #16181D;
+/* ============================================================
+   数字・英字だけ IBM Plex Sans に差し替える（在庫管理アプリと共通・合計23KB）
+
+   シフト表は日付・時刻・人数・時給と、中身がほぼ数値。
+   産業・工学向けに設計された書体を数字にだけ与える。
+
+   ★unicode-range で Latin と記号に限定している★ ので、
+   日本語は従来どおりシステムフォントが当たり、追加のダウンロードは発生しない。
+
+   必要な文字だけに絞り込み済み（pyftsubset）。latin サブセット丸ごとだと
+   1ウェイト22KBだが、7.5KBまで落ちている。ここに無い文字は
+   日本語フォントへ自然にフォールバックする。
+   ============================================================ */
+@font-face {
+  font-family: 'Plex';
+  src: url('/fonts/plex-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0, U+00B0, U+00D7, U+2010-2015, U+2018-201D, U+2026, U+2030, U+2212, U+FF0B;
+}
+@font-face {
+  font-family: 'Plex';
+  src: url('/fonts/plex-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0, U+00B0, U+00D7, U+2010-2015, U+2018-201D, U+2026, U+2030, U+2212, U+FF0B;
+}
+@font-face {
+  font-family: 'Plex';
+  src: url('/fonts/plex-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0, U+00B0, U+00D7, U+2010-2015, U+2018-201D, U+2026, U+2030, U+2212, U+FF0B;
 }
 
+:root {
+  --background: #F4F7FA;
+  --foreground: #10151B;
+}
+
+/* ============================================================
+   デザイントークン（docs/DESIGN_SYSTEM.md §3 が正）
+
+   ★slate / blue のスケールを丸ごと新パレットへ差し替えている★
+
+   この画面群には slate-* / blue-* を使ったクラス文字列が1000箇所以上ある。
+   1つずつ ink-* / ai-* へ書き換えると、差分が巨大になるうえ書き換え漏れが
+   まだらな色として残る。スケールそのものの定義を差し替えれば、既存の
+   クラスは1文字も触らずに全画面が同時に新しい配色へ移る。
+   在庫管理アプリと色が1つもズレないことが、2つで1つのシステムに見える条件。
+
+   新しく書くコードでは下の意味付きトークン（ink / rule / ai / alert / ok）を使うこと。
+   slate-* / blue-* は移行済みの既存コードのために残してある別名にすぎない。
+
+   全色が地 #F4F7FA と面 #FFFFFF の両方で WCAG AA を満たす（実測値は各行のコメント）。
+   ============================================================ */
 @theme {
-  --color-blue-50: #EEF2FC;
-  --color-blue-100: #DCE5F8;
-  --color-blue-200: #B7C9F0;
-  --color-blue-400: #5A7DDB;
-  --color-blue-500: #3A63D6;
-  --color-blue-600: #2452CC;
-  --color-blue-700: #1E43A8;
+  /* --- 意味付きトークン（新規コードはこちらを使う） --- */
+  --color-paper: #F4F7FA;   /* 地・帯（白よりわずかに沈む寒色） */
+  --color-sheet: #FFFFFF;   /* 行の地 */
+  --color-rule: #E2E8ED;    /* 細罫（行間） */
+  --color-rule-2: #C7D0D8;  /* 太罫（区切り） */
+
+  --color-ink: #10151B;     /* 本文  17.06:1 */
+  --color-ink-2: #48535F;   /* 副文   7.29:1 */
+  --color-ink-3: #67717D;   /* 補助   4.61:1 ← AA下限。これより薄い墨を本文に使わない */
+
+  --color-ai-50: #E8F1FB;   /* 行動色の淡色（選択行の地） */
+  --color-ai-600: #0A66C2;  /* 行動   白文字 5.69:1 */
+  --color-ai-700: #08529E;  /* 行動・押下時 */
+
+  --color-alert-600: #C62B1F; /* 警告・破壊  5.19:1 */
+  --color-alert-700: #A32218; /* 警告・押下時 */
+
+  --color-ok-600: #0A7A4B;    /* 成功（保存できた・確定した） */
+  --color-ok-700: #086139;
+
+  /* --- 既存クラス用の別名。値は上と同じ寒色系で揃えてある --- */
+  --color-slate-50: #F4F7FA;   /* = paper */
+  --color-slate-100: #EDF1F5;
+  --color-slate-200: #E2E8ED;  /* = rule */
+  --color-slate-300: #C7D0D8;  /* = rule-2 */
+  --color-slate-400: #97A1AC;  /* 3.0:1 — プレースホルダ・無効状態のみ。本文に使わない */
+  --color-slate-500: #67717D;  /* = ink-3  4.61:1 */
+  --color-slate-600: #48535F;  /* = ink-2  7.29:1 */
+  --color-slate-700: #333D48;
+  --color-slate-800: #1F2831;
+  --color-slate-900: #10151B;  /* = ink */
+
+  --color-blue-50: #E8F1FB;    /* = ai-50 */
+  --color-blue-100: #D3E3F7;
+  --color-blue-200: #A9C7EE;
+  --color-blue-300: #6FA3DE;
+  --color-blue-400: #3D82CE;
+  --color-blue-500: #1A6FC4;
+  --color-blue-600: #0A66C2;   /* = ai-600 */
+  --color-blue-700: #08529E;   /* = ai-700 */
+  --color-blue-800: #063F7A;
+
+  /* --- 状態色。Tailwind既定値は小さい文字でAAを満たさないため差し替える ---
+     text-red-500   … 既定 #EF4444 = 3.76:1（不足）→ #C62B1F = 5.19:1
+     text-emerald-600 … 既定 #059669 = 3.40:1（不足）→ #0A7A4B = 5.01:1
+     text-green-600 … 既定 #16A34A = 3.03:1（不足）→ #0A7A4B = 5.01:1
+     エラー文と「承認済み」は業務上いちばん読み違えてはいけない箇所なので、
+     ここだけは既定パレットに任せない。amber / orange / violet は既定でAAを
+     満たしており、役割の色分け（管理者・公募・指名）として意味が付いているため触らない。 */
+  --color-red-50: #FBEBEA;
+  --color-red-100: #F6D8D5;
+  --color-red-200: #EFB8B3;
+  --color-red-400: #DB4A3D;
+  --color-red-500: #C62B1F;    /* = alert-600  5.19:1 */
+  --color-red-600: #B4241A;
+  --color-red-700: #A32218;    /* = alert-700 */
+
+  /* green と emerald は同じ「正常・承認済み」の意味で混在しているので同値にする */
+  --color-emerald-50: #E6F4ED;
+  --color-emerald-100: #CDEADB;
+  --color-emerald-200: #A8D9BF;
+  --color-emerald-600: #0A7A4B; /* = ok-600  5.01:1 */
+  --color-emerald-700: #086139; /* = ok-700 */
+  --color-green-50: #E6F4ED;
+  --color-green-100: #CDEADB;
+  --color-green-200: #A8D9BF;
+  --color-green-500: #0A7A4B;
+  --color-green-600: #0A7A4B;
+  --color-green-700: #086139;
+
+  /* --- 角丸。既定より大幅に小さくする ---
+     この画面群には rounded-lg/xl/2xl が222箇所ある。大きな角丸は要素を
+     ひとつずつ「カード」に見せ、情報の性質の違いを消してしまう（§2.1-2.2）。
+     色と同じく、クラスを1000箇所書き換えるのではなくスケールの定義を差し替える。
+     rounded-full は別変数なので影響しない（アバターの丸は丸のまま）。
+     ★ここを見た人へ: このアプリでの rounded-lg は 4px であって Tailwind既定の 8px ではない★ */
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 5px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
 }
 
 @theme inline {
@@ -20,24 +148,33 @@
   --color-foreground: var(--foreground);
 }
 
+/* 書体スタック（在庫管理アプリと共通）
+   Plex   … 数字・英字のみ。unicode-range で日本語には当たらない
+   ヒラギノ … Mac / iPhone。現場のスタッフはほぼこれ
+   BIZ UDPGothic … ★Windows 10/11 に同梱★ UD設計で游ゴシックより字面が大きく読みやすい。
+                   游ゴシックは Regular が細く、業務画面では判読性が落ちるため先に置く
+   合成太字は禁止する。太字の前後で行の高さが変わり、行間が乱れるため */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-  font-feature-settings: "palt";
+  font-family: 'Plex', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'BIZ UDPGothic',
+               'Yu Gothic UI', Meiryo, 'Noto Sans JP', system-ui, sans-serif;
+  font-feature-settings: "palt";   /* 日本語の約物を詰める */
+  font-synthesis: none;            /* 合成太字・合成斜体を禁止 */
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* フォーカスリング */
+/* フォーカスリング。行動色を使う（色の予算の4用途のひとつ） */
 :focus-visible {
-  outline: 2px solid var(--color-blue-500, #3A63D6);
+  outline: 2px solid var(--color-ai-600, #0A66C2);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 ::selection {
-  background: var(--color-blue-100, #DCE5F8);
-  color: var(--color-blue-700, #1E43A8);
+  background: var(--color-ai-50, #E8F1FB);
+  color: var(--color-ai-700, #08529E);
 }
 
 /* PIN pad animation */
@@ -50,8 +187,11 @@ body {
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #F1F5F9; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #F4F7FA; }
+::-webkit-scrollbar-thumb { background: #C7D0D8; border-radius: 3px; }
+
+/* iOSでフォーカス時に画面がズームするのを防ぐ（16px未満だとSafariが自動ズームする） */
+.no-zoom-input { font-size: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -121,7 +121,7 @@ export default function AdminStoresPage() {
 
       {/* 追加フォーム */}
       {showAddForm && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
           <h3 className="font-semibold text-slate-700 mb-4">新しい店舗</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -151,7 +151,7 @@ export default function AdminStoresPage() {
       )}
 
       {/* 店舗一覧 */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         {loading ? (
           <p className="text-center text-slate-400 py-12 text-sm">読み込み中…</p>
         ) : stores.length === 0 ? (

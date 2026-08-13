@@ -128,7 +128,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+    <div className="rounded-xl border border-slate-200 bg-white">
       <div className="overflow-auto">
         <div style={{ minWidth }}>
 

@@ -65,7 +65,7 @@ export default function AdminSettingsPage() {
 
       {/* 店舗名（表示のみ）: マルチ店舗化に伴い店舗名はstores.nameに一本化されたため、
           ここでは編集させず参照のみとする */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5">
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-700 mb-1">店舗名</h3>
         <p className="text-xs text-slate-400 mb-3">ヘッダーに表示されます</p>
         <p className="text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{storeName}</p>
@@ -73,7 +73,7 @@ export default function AdminSettingsPage() {
       </div>
 
       {/* 提出期間 */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5">
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-700 mb-1">シフト提出期間</h3>
         <p className="text-xs text-slate-400 mb-4">月ごとに提出可能な期間を設定します。期間外はスタッフが提出できなくなります。未設定の月はいつでも提出可能です。</p>
         <div className="space-y-5">
@@ -133,7 +133,7 @@ export default function AdminSettingsPage() {
       {/* 人件費予測 */}
       <button
         onClick={() => router.push(`/s/${storeSlug}/admin/labor-cost`)}
-        className="w-full bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
       >
         <div>
           <h3 className="font-semibold text-slate-700">人件費予測</h3>
@@ -147,7 +147,7 @@ export default function AdminSettingsPage() {
       {/* アンケート */}
       <button
         onClick={() => router.push(`/s/${storeSlug}/admin/survey`)}
-        className="w-full bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
       >
         <div>
           <h3 className="font-semibold text-slate-700">アンケート管理</h3>
@@ -159,7 +159,7 @@ export default function AdminSettingsPage() {
       </button>
 
       {/* シフト種別一覧 */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5">
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-700 mb-3">シフト種別</h3>
         <table className="w-full text-sm">
           <thead>
