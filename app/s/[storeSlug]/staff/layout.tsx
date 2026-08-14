@@ -8,6 +8,8 @@ import NavBar from '@/components/NavBar';
 import LoginNotificationModal from '@/components/LoginNotificationModal';
 import SurveyModal from '@/components/SurveyModal';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
+import AppFooter from '@/components/AppFooter';
+import UpdateToast from '@/components/UpdateToast';
 
 interface SurveyWithOptions {
   id: string;
@@ -77,7 +79,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           onAnswered={handleSurveyAnswered}
         />
       )}
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">{children}</main>
+      {/* トーストは画面を占有しないので、上の調整依頼・アンケートのポップアップと同時に出ても
+          互いを邪魔しない（全画面モーダルだった頃に必要だった出現順の調整はもう要らない） */}
+      <UpdateToast />
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">
+        {children}
+        <AppFooter />
+      </main>
     </div>
   );
 }

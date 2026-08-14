@@ -15,5 +15,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run check:guide
       - run: npx tsc --noEmit
       - run: npx next build

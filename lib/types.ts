@@ -103,3 +103,21 @@ export interface ShiftRequestTarget {
   responded_at: string | null;
   user?: User;
 }
+
+export type FeedbackDestination = 'store' | 'dev';
+export type FeedbackCategory = 'request' | 'bug';
+export type FeedbackStatus = 'new' | 'read' | 'done';
+
+export interface Feedback {
+  id: string;
+  store_id: string | null;
+  user_id: string;
+  destination: FeedbackDestination;
+  category: FeedbackCategory;
+  body: string;
+  status: FeedbackStatus;
+  app_version: string;
+  github_issue_number: number | null;
+  created_at: string;
+  user?: User;
+}

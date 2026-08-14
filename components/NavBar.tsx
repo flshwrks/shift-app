@@ -9,7 +9,7 @@ import { canAccessAdmin, isHqRole } from '@/lib/types';
 import { HQ_LOGIN, HQ_HOME, storeLoginPath } from '@/lib/routes';
 import HelpModal from '@/components/HelpModal';
 import BrandMark from '@/components/BrandMark';
-import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp } from '@/components/icons';
+import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp, IconMessageSquare } from '@/components/icons';
 
 // パス断片のみを持たせ、レンダリング時に店舗プレフィックス（/s/[storeSlug]）を付ける。
 // こうすることでプレフィックスの付け方を1箇所（buildHref）に集約できる。
@@ -24,6 +24,7 @@ const adminNav = [
   { path: '/admin/requests', label: '依頼管理', shortLabel: '依頼', Icon: IconInbox },
   { path: '/admin/staff', label: 'スタッフ', shortLabel: 'スタッフ', Icon: IconUsers },
   { path: '/admin/settings', label: '設定', shortLabel: '設定', Icon: IconSettings },
+  { path: '/admin/feedback', label: '要望', shortLabel: '要望', Icon: IconMessageSquare },
 ];
 
 export default function NavBar() {
@@ -39,6 +40,7 @@ export default function NavBar() {
   const [hasDraft, setHasDraft] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [feedbackUnreadCount, setFeedbackUnreadCount] = useState(0);
 
   const buildHref = (path: string) => (storeSlug ? `/s/${storeSlug}${path}` : path);
 
@@ -99,12 +101,42 @@ export default function NavBar() {
     return () => { supabase.removeChannel(channel); };
   }, [user, storeId]);
 
+  // 要望の未読件数。管理者(admin/hq_admin/developer)だけが受信箱を持つため、
+  // スタッフの場合は購読しない（pendingRequestCountの絞り込み方針と同じ）
+  useEffect(() => {
+    if (!user || !storeId || !canAccessAdmin(user.role)) return;
+
+    const fetchFeedbackUnreadCount = async () => {
+      const { count } = await supabase
+        .from('feedback')
+        .select('*', { count: 'exact', head: true })
+        .eq('store_id', storeId)
+        .eq('destination', 'store')
+        .eq('status', 'new');
+      setFeedbackUnreadCount(count ?? 0);
+    };
+
+    fetchFeedbackUnreadCount();
+
+    const channel = supabase.channel(`navbar-feedback-${storeId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `store_id=eq.${storeId}` }, fetchFeedbackUnreadCount)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, storeId]);
+
   const navItems = (user && canAccessAdmin(user.role)) ? adminNav : staffNav as typeof adminNav;
 
-  const getBadges = (path: string, active: boolean) => ({
-    isDraftBadge: hasDraft && path === '/staff/shifts' && !active,
-    isRequestBadge: pendingRequestCount > 0 && (path === '/staff/requests' || path === '/admin/requests') && !active,
-  });
+  // 件数バッジは経路ごとに高々1種類しか付かない（依頼バッジと要望バッジは別パス）ため、
+  // どちらの件数かをここで解決してから1つの数値として返す。呼び出し側で
+  // 「どちらのバッジか」を判定するのはmobile/desktopの2箇所で重複するだけなので避ける。
+  const getBadges = (path: string, active: boolean) => {
+    if (active) return { isDraftBadge: false, badgeCount: 0 };
+    const isDraftBadge = hasDraft && path === '/staff/shifts';
+    const badgeCount =
+      path === '/staff/requests' || path === '/admin/requests' ? pendingRequestCount :
+      path === '/admin/feedback' ? feedbackUnreadCount : 0;
+    return { isDraftBadge, badgeCount };
+  };
 
   const handleLogout = () => {
     if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
@@ -170,7 +202,7 @@ export default function NavBar() {
         {navItems.map(item => {
           const href = buildHref(item.path);
           const active = pathname === href;
-          const { isDraftBadge, isRequestBadge } = getBadges(item.path, active);
+          const { isDraftBadge, badgeCount } = getBadges(item.path, active);
           const Icon = item.Icon;
           return (
             <Link
@@ -186,9 +218,9 @@ export default function NavBar() {
                 {isDraftBadge && (
                   <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border border-white" />
                 )}
-                {isRequestBadge && (
+                {badgeCount > 0 && (
                   <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-orange-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center px-0.5">
-                    {pendingRequestCount > 9 ? '9+' : pendingRequestCount}
+                    {badgeCount > 9 ? '9+' : badgeCount}
                   </span>
                 )}
               </span>
@@ -204,7 +236,7 @@ export default function NavBar() {
           {navItems.map(item => {
             const href = buildHref(item.path);
             const active = pathname === href;
-            const { isDraftBadge, isRequestBadge } = getBadges(item.path, active);
+            const { isDraftBadge, badgeCount } = getBadges(item.path, active);
             return (
               <Link
                 key={item.path}
@@ -219,9 +251,9 @@ export default function NavBar() {
                 {isDraftBadge && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
                 )}
-                {isRequestBadge && (
+                {badgeCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">
-                    {pendingRequestCount > 9 ? '9+' : pendingRequestCount}
+                    {badgeCount > 9 ? '9+' : badgeCount}
                   </span>
                 )}
               </Link>
@@ -231,7 +263,10 @@ export default function NavBar() {
       </div>
 
       {showHelp && user && (
-        <HelpModal role={user.role === 'staff' ? 'staff' : 'admin'} onClose={() => setShowHelp(false)} />
+        <HelpModal
+          role={isHqRole(user.role) ? 'hq_admin' : user.role === 'staff' ? 'staff' : 'admin'}
+          onClose={() => setShowHelp(false)}
+        />
       )}
     </>
   );

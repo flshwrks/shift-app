@@ -1,11 +1,13 @@
 {
   "name": "shift-app",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "gen:guide": "tsx scripts/generate-guide.ts",
+    "check:guide": "tsx scripts/generate-guide.ts --check"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",
@@ -22,6 +24,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

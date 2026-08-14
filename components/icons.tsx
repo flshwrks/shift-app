@@ -109,3 +109,28 @@ export function IconDownload(props: IconProps) {
     </svg>
   );
 }
+
+export function IconMessageSquare(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+/** components/HelpModal.tsx で使う、絵文字キー→SVGアイコンの対応表。
+ *  HELP_CONTENT（lib/help/content.ts）の section.icon はこのマップのキーと同じ絵文字を使う。
+ *  マップに無い絵文字は SectionIcon が素の絵文字にフォールバックする。 */
+const SECTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  '📝': IconPencil,
+  '📅': IconCalendar,
+  '📨': IconInbox,
+  '👥': IconUsers,
+  '⚙️': IconSettings,
+};
+
+export function SectionIcon({ icon, className = 'w-5 h-5 text-white' }: { icon: string; className?: string }) {
+  const Icon = SECTION_ICONS[icon];
+  if (!Icon) return <span>{icon}</span>;
+  return <Icon className={className} />;
+}

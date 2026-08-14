@@ -6,7 +6,8 @@
 
 - `package.json` の `version` を [Semantic Versioning](https://semver.org/lang/ja/) でインクリメント
 - `CHANGELOG.md` の先頭に日本語でエントリを追記（`## [x.y.z] - YYYY-MM-DD` 形式）。詳細な技術的経緯は `improvement_list/` を作成し、CHANGELOGからは概要とリンクだけにする
-- `docs/GUIDE.md`（全機能の使い方マニュアル）の該当セクションを更新する。新しい画面・操作が増えた場合は追記、既存の挙動が変わった場合は書き換える。**このファイルが唯一の「全機能一覧」であること**を保つ（`docs/SPEC.md` 側に機能チェックリストを重複して書かない。SPEC.mdは技術資料に徹する）
+- `lib/help/content.ts`（`HELP_CONTENT`）を更新する。ここがアプリ内ヘルプ（`components/HelpModal.tsx`）と `docs/GUIDE.md` 共通の唯一の正データ。新しい画面・操作が増えた場合は追記、既存の挙動が変わった場合は書き換える
+- `docs/GUIDE.md` の生成部分（「3. スタッフ向け機能」〜「5. 本部管理者向け機能」）は `npm run gen:guide` で再生成する。**手で編集しない**（CIの `npm run check:guide` がズレを検出する）。`docs/GUIDE.md` が**唯一の「全機能一覧」であること**を保つ（`docs/SPEC.md` 側に機能チェックリストを重複して書かない。SPEC.mdは技術資料に徹する）
 
 軽微な修正（誤字・スタイル調整・コメントのみの変更等）は対象外。バージョン番号を上げるかどうか迷ったら、ユーザーに確認する。
 
