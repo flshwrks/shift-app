@@ -54,14 +54,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: BODY_ERROR }, { status: 400 });
   }
 
-  // 本部管理者(hq_admin/developer)は所属店舗を持たないため「店長へ」の届け先が無い。
-  // DB側の feedback_store_id_required 制約でも弾かれるが、それだと生のPostgresエラー文が
-  // 画面に出てしまうので、ここで意味のある日本語メッセージにして返す
+  // 要望を送れるのはスタッフだけ。管理者・本部管理者は「受け取って対応する側」であり、
+  // 自分宛てにも開発者宛てにも送れないようにしている（UI側でも導線を出していないが、
+  // APIを直接叩かれた場合に備えてサーバー側でも検証する）
+  if (session.role !== 'staff') {
+    return NextResponse.json({ error: '要望を送れるのはスタッフのみです' }, { status: 403 });
+  }
+
+  // スタッフは必ず店舗に属するのでここには到達しない想定だが、万一 storeId が無い場合に
+  // DB側の feedback_store_id_required 制約で生のPostgresエラー文が画面に出るのを防ぐ
   if (destination === 'store' && !session.storeId) {
-    return NextResponse.json(
-      { error: '本部管理者は所属店舗が無いため「店長へ」は送信できません' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: '所属店舗が特定できないため送信できません' }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -204,8 +207,14 @@ async function createGithubIssue(params: {
   });
 
   if (!res.ok) {
-    // labelsが存在しない場合等も含め、失敗は呼び出し元で握りつぶす方針（要望の保存自体は成功させる）
-    throw new Error(`GitHub Issue作成に失敗しました (status: ${res.status})`);
+    // ★応答本文を必ずログに含める★ ステータスだけでは原因が特定できない。
+    // 特に403は「トークンは有効だが権限が足りない」で、本文の message に
+    // "Resource not accessible by personal access token" のような理由が入っている。
+    // トークン自体は絶対にログへ出さないこと（Authorizationヘッダは触れない）。
+    const detail = await res.text().catch(() => '');
+    throw new Error(
+      `GitHub Issue作成に失敗しました (status: ${res.status}, repo: ${GITHUB_REPO}) ${detail.slice(0, 300)}`,
+    );
   }
 
   const issue = (await res.json()) as { number?: number };

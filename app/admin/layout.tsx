@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { isHqRole } from '@/lib/types';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
 import BrandMark from '@/components/BrandMark';
-import AppFooter from '@/components/AppFooter';
+import AppMenu from '@/components/AppMenu';
 import UpdateToast from '@/components/UpdateToast';
 
 // 本部管理者専用レイアウト。店舗管理者用の中身は /s/[storeSlug]/admin/layout.tsx へ
@@ -50,6 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
           </div>
           <span className="text-xs text-slate-500 truncate max-w-[120px] flex-shrink-0">{user.name}</span>
+          <AppMenu />
           <button
             onClick={handleLogout}
             className="text-xs px-2.5 h-7 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
@@ -61,7 +62,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <UpdateToast />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {children}
-        <AppFooter />
       </main>
     </div>
   );

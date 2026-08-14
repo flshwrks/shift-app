@@ -7,9 +7,9 @@ import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { canAccessAdmin, isHqRole } from '@/lib/types';
 import { HQ_LOGIN, HQ_HOME, storeLoginPath } from '@/lib/routes';
-import HelpModal from '@/components/HelpModal';
 import BrandMark from '@/components/BrandMark';
-import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconHelp, IconMessageSquare } from '@/components/icons';
+import AppMenu from '@/components/AppMenu';
+import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconMessageSquare } from '@/components/icons';
 
 // パス断片のみを持たせ、レンダリング時に店舗プレフィックス（/s/[storeSlug]）を付ける。
 // こうすることでプレフィックスの付け方を1箇所（buildHref）に集約できる。
@@ -38,7 +38,6 @@ export default function NavBar() {
   const storeId = store?.storeId ?? null;
   const orgName = store?.storeName ?? '';
   const [hasDraft, setHasDraft] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [feedbackUnreadCount, setFeedbackUnreadCount] = useState(0);
 
@@ -101,8 +100,10 @@ export default function NavBar() {
     return () => { supabase.removeChannel(channel); };
   }, [user, storeId]);
 
-  // 要望の未読件数。管理者(admin/hq_admin/developer)だけが受信箱を持つため、
-  // スタッフの場合は購読しない（pendingRequestCountの絞り込み方針と同じ）
+  // 要望の未対応件数。管理者(admin/hq_admin/developer)だけが受信箱を持つため、
+  // スタッフの場合は購読しない（pendingRequestCountの絞り込み方針と同じ）。
+  // 受信箱のタブ（未対応/対応済み）と数が食い違わないよう、'new'ではなく
+  // 「done でないもの」を数える
   useEffect(() => {
     if (!user || !storeId || !canAccessAdmin(user.role)) return;
 
@@ -112,7 +113,7 @@ export default function NavBar() {
         .select('*', { count: 'exact', head: true })
         .eq('store_id', storeId)
         .eq('destination', 'store')
-        .eq('status', 'new');
+        .neq('status', 'done');
       setFeedbackUnreadCount(count ?? 0);
     };
 
@@ -180,14 +181,7 @@ export default function NavBar() {
               本部管理へ戻る
             </Link>
           )}
-          <button
-            onClick={() => setShowHelp(true)}
-            className="w-7 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center justify-center flex-shrink-0 transition-colors"
-            title="使い方"
-            aria-label="使い方"
-          >
-            <IconHelp className="w-4 h-4" />
-          </button>
+          <AppMenu />
           <button
             onClick={handleLogout}
             className="text-xs px-2.5 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
@@ -262,12 +256,6 @@ export default function NavBar() {
         </div>
       </div>
 
-      {showHelp && user && (
-        <HelpModal
-          role={isHqRole(user.role) ? 'hq_admin' : user.role === 'staff' ? 'staff' : 'admin'}
-          onClose={() => setShowHelp(false)}
-        />
-      )}
     </>
   );
 }

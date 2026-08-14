@@ -3,7 +3,7 @@
 --
 -- ★要手動適用★（Supabase SQL Editorで実行すること）
 --
--- 目的: 「スタッフ→店長」「利用者→開発者（GitHub Issue）」の2つの宛先を
+-- 目的: 「スタッフ→店舗管理者」「スタッフ→開発者（GitHub Issue）」の2つの宛先を
 -- 1つのテーブルでまかなう、要望・不具合報告の送信機能を追加する。
 --
 -- 在庫管理アプリ(inventory-app)への影響: なし。
@@ -20,7 +20,7 @@
 -- feedback テーブル
 --
 -- store_id は本部管理者(hq_admin)が所属店舗を持たないため nullable にする。
--- 「店長へ」宛て(destination='store')は届け先の店舗が特定できないと意味を成さないため、
+-- 「管理者へ」宛て(destination='store')は届け先の店舗が特定できないと意味を成さないため、
 -- destination='dev' の場合のみ store_id を null で許容するCHECK制約を付ける。
 -- ============================================================
 create table if not exists public.feedback (
@@ -34,7 +34,7 @@ create table if not exists public.feedback (
   app_version text default '',
   github_issue_number integer,
   created_at timestamptz default now(),
-  -- 「店長へ」宛ては届け先の店舗が無いと成立しないため、destinationが'dev'の
+  -- 「管理者へ」宛ては届け先の店舗が無いと成立しないため、destinationが'dev'の
   -- ときだけstore_idのnullを許容する（'store'ならstore_idは必須）
   constraint feedback_store_id_required check (destination = 'dev' or store_id is not null)
 );
@@ -86,7 +86,7 @@ create trigger feedback_set_store_id
 -- 可視性:
 --   - 本人が出したもの: user_id = jwt_user_id()
 --   - 本部管理者: is_hq_admin()
---   - 店舗管理者: 自店に届いた「店長へ」宛てのみ
+--   - 店舗管理者: 自店に届いた「管理者へ」宛てのみ
 --     (jwt_app_role() = 'admin' and store_id = jwt_store_id() and destination = 'store')
 -- ★スタッフが他のスタッフの要望を読めてはいけない★（個人的な内容を含みうるため）。
 -- 上記の3条件はいずれも「本人」か「管理者」に限られており、一般スタッフが

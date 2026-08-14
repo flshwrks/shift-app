@@ -22,7 +22,14 @@ interface LoginUserRow {
   display_order?: number;
 }
 
-// get_public_shifts RPC の戻り値。comment等の私的な列は含めていない。
+// get_public_memos RPC の戻り値（日付ごとのメモ）
+interface PublicMemoRow {
+  memo_date: string;
+  memo: string;
+}
+
+// get_public_shifts RPC の戻り値。comment（シフトごとの私的な備考）は含めていない。
+// 日付ごとのメモは別RPCで取得して表示する（Ver.2.6.0で方針変更。下のコメント参照）。
 interface PublicShiftRow {
   id: string;
   user_id: string;
@@ -39,8 +46,14 @@ interface PublicShiftRow {
 // 提出・編集・確定などの操作は一切できない、完全な読み取り専用。
 //
 // RLSは匿名アクセスを全面的にブロックしたままなので、データ取得は
-// list_login_users / get_public_shifts の SECURITY DEFINER RPC 経由のみで行う
-// （テーブルへの直接SELECTは、この画面でも0件になる）。
+// list_login_users / get_public_shifts / get_public_memos の
+// SECURITY DEFINER RPC 経由のみで行う（テーブルへの直接SELECTは、この画面でも0件になる）。
+//
+// ★Ver.2.6.0で方針変更★ 日付ごとのメモを表示するようにした。
+// Ver.2.3.0 時点では「メモは不特定多数に見えるべきでない」として非表示にしていたが、
+// 運用側の「公開シフト表でもメモを見たい」という要望により覆した。
+// URLを知っていれば誰でも読めるため、メモに個人的な内容を書かない運用が前提。
+// シフトごとの comment は引き続き公開しない（こちらは方針を変えていない）。
 export default function PublicSchedulePage() {
   const { storeSlug, storeName } = useStore();
   const { year, month, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth } = usePersistedMonth('month_public_schedule');
@@ -48,6 +61,7 @@ export default function PublicSchedulePage() {
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [memos, setMemos] = useState<Record<string, string>>({});
   const [detailShift, setDetailShift] = useState<Shift | null>(null);
 
   useEffect(() => {
@@ -55,9 +69,12 @@ export default function PublicSchedulePage() {
 
     async function fetchData() {
       setLoading(true);
-      const [{ data: userRows }, { data: shiftRows }] = await Promise.all([
+      const start = monthStart(year, month);
+      const end = monthEnd(year, month);
+      const [{ data: userRows }, { data: shiftRows }, { data: memoRows }] = await Promise.all([
         supabase.rpc('list_login_users', { p_store_slug: storeSlug }),
-        supabase.rpc('get_public_shifts', { p_store_slug: storeSlug, p_start: monthStart(year, month), p_end: monthEnd(year, month) }),
+        supabase.rpc('get_public_shifts', { p_store_slug: storeSlug, p_start: start, p_end: end }),
+        supabase.rpc('get_public_memos', { p_store_slug: storeSlug, p_start: start, p_end: end }),
       ]);
       if (!alive) return;
 
@@ -69,6 +86,11 @@ export default function PublicSchedulePage() {
         start_time: s.start_time, end_time: s.end_time, comment: '', status: s.status,
         created_at: '', updated_at: '',
       })));
+      const memoMap: Record<string, string> = {};
+      ((memoRows ?? []) as PublicMemoRow[]).forEach(({ memo_date, memo }) => {
+        memoMap[memo_date] = memo;
+      });
+      setMemos(memoMap);
       setLoading(false);
     }
 
@@ -132,9 +154,9 @@ export default function PublicSchedulePage() {
         {loading ? (
           <p className="text-center text-slate-400 py-12 text-sm">読み込み中…</p>
         ) : view === 'table' ? (
-          <TableView year={year} month={month} users={users} shifts={shifts} onShiftClick={s => setDetailShift(s)} />
+          <TableView year={year} month={month} users={users} shifts={shifts} memos={memos} onShiftClick={s => setDetailShift(s)} />
         ) : (
-          <TimelineView year={year} month={month} users={users} shifts={shifts} onShiftClick={s => setDetailShift(s)} />
+          <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onShiftClick={s => setDetailShift(s)} />
         )}
       </main>
 

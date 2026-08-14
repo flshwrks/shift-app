@@ -118,6 +118,28 @@ export function IconMessageSquare(props: IconProps) {
   );
 }
 
+/** Lucide "more-horizontal"。ヘッダーの「その他」メニューに使う */
+export function IconDots(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </svg>
+  );
+}
+
+/** Lucide "history"。更新履歴へのリンクに使う */
+export function IconHistory(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  );
+}
+
 /** components/HelpModal.tsx で使う、絵文字キー→SVGアイコンの対応表。
  *  HELP_CONTENT（lib/help/content.ts）の section.icon はこのマップのキーと同じ絵文字を使う。
  *  マップに無い絵文字は SectionIcon が素の絵文字にフォールバックする。 */

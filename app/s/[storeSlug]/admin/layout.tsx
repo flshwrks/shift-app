@@ -7,7 +7,6 @@ import { canAccessAdmin } from '@/lib/types';
 import NavBar from '@/components/NavBar';
 import LoginNotificationModal from '@/components/LoginNotificationModal';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
-import AppFooter from '@/components/AppFooter';
 import UpdateToast from '@/components/UpdateToast';
 
 // 店舗コンテキストは親の /s/[storeSlug]/layout.tsx が StoreProvider で
@@ -35,7 +34,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <UpdateToast />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">
         {children}
-        <AppFooter />
       </main>
     </div>
   );

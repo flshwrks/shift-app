@@ -1,8 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { useAuth } from '@/lib/auth';
-import { isHqRole } from '@/lib/types';
 import type { FeedbackCategory, FeedbackDestination } from '@/lib/types';
 import { IconCheck } from '@/components/icons';
 
@@ -12,15 +10,14 @@ interface Props {
 
 const BODY_MAX = 2000;
 
+// 要望を送れるのはスタッフだけ。管理者・本部管理者は「受け取って対応する側」なので、
+// 自分宛て（管理者へ）にも開発者へも送れないようにしている。
+// この画面自体、スタッフ以外には導線を出していない（AppMenu参照）が、
+// /api/feedback 側でもロールを検証している。
 export default function FeedbackModal({ onClose }: Props) {
   useBodyScrollLock();
-  const { user } = useAuth();
 
-  // 本部管理者(hq_admin/developer)は所属店舗が無く「店長へ」の届け先が無い。
-  // /api/feedback も400で弾くが、そもそも選ばせないことで利用者が宛先を間違えないようにする
-  const canSendToStore = !!user && !isHqRole(user.role);
-
-  const [destination, setDestination] = useState<FeedbackDestination>(canSendToStore ? 'store' : 'dev');
+  const [destination, setDestination] = useState<FeedbackDestination>('store');
   const [category, setCategory] = useState<FeedbackCategory>('request');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -75,41 +72,33 @@ export default function FeedbackModal({ onClose }: Props) {
             {/* 宛先 */}
             <div className="mb-4">
               <label className="block text-[11px] font-medium text-slate-500 mb-1.5">送信先</label>
-              {canSendToStore ? (
-                <>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setDestination('store')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                        destination === 'store'
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      店長へ
-                    </button>
-                    <button
-                      onClick={() => setDestination('dev')}
-                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
-                        destination === 'dev'
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      開発者へ
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    {destination === 'store'
-                      ? 'お店の管理者に届きます'
-                      : 'アプリの改善要望として開発者に届きます'}
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                  開発者へ（アプリの改善要望として届きます）
-                </p>
-              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDestination('store')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                    destination === 'store'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  管理者へ
+                </button>
+                <button
+                  onClick={() => setDestination('dev')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
+                    destination === 'dev'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  開発者へ
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mt-1.5">
+                {destination === 'store'
+                  ? 'お店の管理者に届きます'
+                  : 'アプリの改善要望として開発者に届きます'}
+              </p>
             </div>
 
             {/* 種別 */}

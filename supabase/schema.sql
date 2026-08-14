@@ -564,12 +564,44 @@ $$;
 
 grant execute on function public.get_public_shifts(text, date, date) to anon, authenticated;
 
+-- 公開シフト表に表示する日付ごとのメモ。app_settings の memo_YYYY-MM-DD だけを
+-- 指定店舗・指定期間に限って返す（提出期間・時給など他のキーは返さない）。
+--
+-- ★Ver.2.3.0 の「メモは公開しない」という判断を Ver.2.6.0 で意図的に覆している★
+-- URLを知っていれば誰でもメモを読めるため、メモに個人的な内容を書かない運用が前提。
+-- シフトの comment 列は従来どおり公開しない（こちらは方針を変えていない）。
+--
+-- key の日付部分は date にキャストしない。不正なキーが紛れ込むとキャスト例外で
+-- クエリ全体が落ちるうえ、WHERE句の評価順序は保証されないため「正規表現で弾いてから
+-- キャスト」も安全とは言い切れない。'YYYY-MM-DD' は辞書順と日付順が一致するので
+-- 文字列のまま範囲比較する。
+create or replace function public.get_public_memos(p_store_slug text, p_start date, p_end date)
+returns table(
+  memo_date text,
+  memo text
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select substring(a.key from 6) as memo_date, a.value as memo
+  from public.app_settings a
+  join public.stores st on st.id = a.store_id
+  where st.slug = p_store_slug
+    and a.key ~ '^memo_[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    and a.value <> ''
+    and substring(a.key from 6)
+        between to_char(p_start, 'YYYY-MM-DD') and to_char(p_end, 'YYYY-MM-DD');
+$$;
+
+grant execute on function public.get_public_memos(text, date, date) to anon, authenticated;
+
 -- ============================================================
 -- 要望の送信機能（feedback テーブル）
 --
--- 「スタッフ→店長」「利用者→開発者（GitHub Issue）」の2つの宛先を1つの
+-- 「スタッフ→店舗管理者」「スタッフ→開発者（GitHub Issue）」の2つの宛先を1つの
 -- テーブルでまかなう。store_id は本部管理者(hq_admin)が所属店舗を持たないため
--- nullable にする。「店長へ」宛て(destination='store')は届け先の店舗が特定
+-- nullable にする。「管理者へ」宛て(destination='store')は届け先の店舗が特定
 -- できないと意味を成さないため、destination='dev' の場合のみ store_id を
 -- null で許容するCHECK制約を付ける。
 -- ============================================================
@@ -584,7 +616,7 @@ create table if not exists public.feedback (
   app_version text default '',
   github_issue_number integer,
   created_at timestamptz default now(),
-  -- 「店長へ」宛ては届け先の店舗が無いと成立しないため、destinationが'dev'の
+  -- 「管理者へ」宛ては届け先の店舗が無いと成立しないため、destinationが'dev'の
   -- ときだけstore_idのnullを許容する（'store'ならstore_idは必須）
   constraint feedback_store_id_required check (destination = 'dev' or store_id is not null)
 );
@@ -636,7 +668,7 @@ create trigger feedback_set_store_id
 -- 可視性:
 --   - 本人が出したもの: user_id = jwt_user_id()
 --   - 本部管理者: is_hq_admin()
---   - 店舗管理者: 自店に届いた「店長へ」宛てのみ
+--   - 店舗管理者: 自店に届いた「管理者へ」宛てのみ
 --     (jwt_app_role() = 'admin' and store_id = jwt_store_id() and destination = 'store')
 -- ★スタッフが他のスタッフの要望を読めてはいけない★（個人的な内容を含みうるため）。
 -- 上記の3条件はいずれも「本人」か「管理者」に限られており、一般スタッフが

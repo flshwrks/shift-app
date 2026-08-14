@@ -8,7 +8,6 @@ import NavBar from '@/components/NavBar';
 import LoginNotificationModal from '@/components/LoginNotificationModal';
 import SurveyModal from '@/components/SurveyModal';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
-import AppFooter from '@/components/AppFooter';
 import UpdateToast from '@/components/UpdateToast';
 
 interface SurveyWithOptions {
@@ -84,7 +83,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <UpdateToast />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">
         {children}
-        <AppFooter />
       </main>
     </div>
   );
