@@ -118,13 +118,11 @@ export function IconMessageSquare(props: IconProps) {
   );
 }
 
-/** Lucide "more-horizontal"。ヘッダーの「その他」メニューに使う */
-export function IconDots(props: IconProps) {
+/** Lucide "menu"（ハンバーガー）。ヘッダーのメニューボタンに使う */
+export function IconMenu(props: IconProps) {
   return (
     <svg {...defaults} {...props}>
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-      <circle cx="5" cy="12" r="1" />
+      <path d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   );
 }
