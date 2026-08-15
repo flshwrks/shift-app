@@ -60,6 +60,24 @@ export default function AdminRequestsPage() {
     setShiftMap(newShiftMap);
   }, [year, month, storeId]);
 
+  // 日付が過ぎた依頼を片付けてから一覧を取る。
+  // 募集中のまま日付だけ過ぎた依頼が残ると、スタッフ側の未対応バッジが永久に減らず
+  // 通知が意味を失うため。削除はサーバー側（service role・自店のみ）で行う。
+  // 失敗しても一覧表示は続行する（掃除ができないだけで、閲覧を妨げる理由はない）
+  useEffect(() => {
+    if (!storeId) return;
+    let alive = true;
+    fetch('/api/admin/requests/cleanup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storeId }),
+    })
+      .then(res => res.json())
+      .then(data => { if (alive && data?.deleted > 0) fetchData(); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [storeId, fetchData]);
+
   useEffect(() => {
     fetchData();
     // shift_request_targetsにはstore_id列が無いためfilterを付けない（親のshift_requests経由でスコープされる）

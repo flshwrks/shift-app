@@ -1,15 +1,14 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { canAccessAdmin, isHqRole } from '@/lib/types';
-import { HQ_LOGIN, HQ_HOME, storeLoginPath } from '@/lib/routes';
+import { canAccessAdmin } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 import AppMenu from '@/components/AppMenu';
-import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings, IconMessageSquare } from '@/components/icons';
+import { IconPencil, IconCalendar, IconInbox, IconUsers, IconSettings } from '@/components/icons';
 
 // パス断片のみを持たせ、レンダリング時に店舗プレフィックス（/s/[storeSlug]）を付ける。
 // こうすることでプレフィックスの付け方を1箇所（buildHref）に集約できる。
@@ -23,14 +22,15 @@ const adminNav = [
   { path: '/admin/schedule', label: 'シフト管理', shortLabel: 'シフト', Icon: IconCalendar },
   { path: '/admin/requests', label: '依頼管理', shortLabel: '依頼', Icon: IconInbox },
   { path: '/admin/staff', label: 'スタッフ', shortLabel: 'スタッフ', Icon: IconUsers },
+  // 「要望」はナビに出さず設定画面の中に置く。日常的に開くものではないので、
+  // 毎日使うシフト・依頼・スタッフと同じ高さに並べると重要度を取り違える。
+  // 未対応があることは設定のバッジで気づける
   { path: '/admin/settings', label: '設定', shortLabel: '設定', Icon: IconSettings },
-  { path: '/admin/feedback', label: '要望', shortLabel: '要望', Icon: IconMessageSquare },
 ];
 
 export default function NavBar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   // NavBar は /s/[storeSlug]/ 配下でのみ使われる想定だが、Provider外で呼ばれても
   // クラッシュしないよう useStoreOptional を使う（storeSlug が無ければリンクは素のパスにフォールバック）。
   const store = useStoreOptional();
@@ -135,22 +135,11 @@ export default function NavBar() {
     const isDraftBadge = hasDraft && path === '/staff/shifts';
     const badgeCount =
       path === '/staff/requests' || path === '/admin/requests' ? pendingRequestCount :
-      path === '/admin/feedback' ? feedbackUnreadCount : 0;
+      // 要望は設定画面の中にあるので、未対応件数は設定に出す
+      path === '/admin/settings' ? feedbackUnreadCount : 0;
     return { isDraftBadge, badgeCount };
   };
 
-  const handleLogout = () => {
-    if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
-    fetch('/api/logout', { method: 'POST' }).catch(() => {});
-    // 本部管理者は店舗の管理画面(/s/[storeSlug]/admin/*)を横断的に閲覧できるため、
-    // storeSlugの有無だけで判定すると「本部管理者が今見ている店舗のログイン画面」に
-    // 送られてしまう。ロールを先に見て、本部管理者は必ず本部ログインへ戻す。
-    const destination = user && isHqRole(user.role)
-      ? HQ_LOGIN
-      : storeSlug ? storeLoginPath(storeSlug) : HQ_LOGIN;
-    logout();
-    router.replace(destination);
-  };
 
   return (
     <>
@@ -158,36 +147,22 @@ export default function NavBar() {
           2つのアプリを行き来したときに「別のサービス」に見える */}
       <header className="bg-white/90 backdrop-blur border-b border-slate-300 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 flex items-center h-[52px] gap-2">
+          {/* ヘッダーに置くのは「今どの店舗を見ているか」だけにする。
+              ユーザー名・本部管理へ戻る・ログアウトはメニュー(AppMenu)へ移した。
+              全部を横並びにすると、店舗名が truncate で潰れたり、
+              本部管理者では要素が重なって読めなくなっていた */}
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <BrandMark size="sm" />
-            <span className="text-[13px] font-semibold text-slate-900 whitespace-nowrap">シフト管理</span>
+            {/* 狭い画面ではアプリ名を省き、店舗名に幅を譲る（ブランドマークで識別できる） */}
+            <span className="hidden sm:inline text-[13px] font-semibold text-slate-900 whitespace-nowrap">シフト管理</span>
             {orgName && (
               <>
-                <span className="text-slate-300 text-sm">|</span>
-                <span className="text-[13px] text-slate-500 truncate">{orgName}</span>
+                <span className="hidden sm:inline text-slate-300 text-sm">|</span>
+                <span className="text-[13px] text-slate-600 truncate">{orgName}</span>
               </>
             )}
           </div>
-          <span className="text-xs text-slate-500 truncate max-w-[80px] flex-shrink-0">{user?.name}</span>
-          {user && isHqRole(user.role) && (
-            // 本部管理者が店舗の管理画面を覗いた後、ログアウト（PIN再入力）せずに
-            // セッションを保ったまま店舗一覧へ戻れるようにする専用リンク。
-            // 「ログアウト」は文字通りセッションを破棄するボタンなので、
-            // 単に本部へ戻りたいだけの場面ではこちらを使う。
-            <Link
-              href={HQ_HOME}
-              className="text-xs px-2.5 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0 flex items-center"
-            >
-              本部管理へ戻る
-            </Link>
-          )}
           <AppMenu />
-          <button
-            onClick={handleLogout}
-            className="text-xs px-2.5 h-7 rounded-[3px] bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
-          >
-            ログアウト
-          </button>
         </div>
       </header>
 

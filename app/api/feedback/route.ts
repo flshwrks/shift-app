@@ -162,6 +162,37 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
+// 対応済みの要望を削除する。
+// 未対応のものは消せない（「読まずに消す」を構造的に防ぐ）。
+// 削除は元に戻せないので、消せる範囲もPATCHと同じくサーバー側で絞る:
+// 本部管理者以外は「自店に届いたdestination='store'の行」だけ。
+export async function DELETE(request: Request) {
+  const session = await requireAdmin();
+  if (session instanceof NextResponse) return session;
+
+  const b = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const id = typeof b?.id === 'string' ? b.id : '';
+  if (!id) return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
+
+  const admin = createAdminClient();
+
+  let query = admin.from('feedback').delete().eq('id', id).eq('status', 'done');
+  if (!isHqRole(session.role)) {
+    if (!session.storeId) return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+    query = query.eq('store_id', session.storeId).eq('destination', 'store');
+  }
+
+  // 0件削除は「該当なし」として扱いたいので、消せた行を明示的に受け取る。
+  // status='done' の条件で0件になった場合（未対応を消そうとした場合）もここに来る
+  const { data, error } = await query.select('id');
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (!data?.length) {
+    return NextResponse.json({ error: '対応済みの要望が見つかりません' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 // GitHubにIssueを作成する。
 // ★店舗名・店舗slug・store_id・氏名・user_idは絶対に含めない★
 // このIssueは外部サービス(GitHub)に送られ、リポジトリを見られる誰にでも公開されうる。

@@ -59,6 +59,25 @@ export default function HqFeedbackPage() {
   const doneItems = items.filter(i => i.status === 'done');
   const displayed = tab === 'open' ? openItems : doneItems;
 
+  // 対応済みのものだけ削除できる。元に戻せないので確認を挟む
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('この要望を削除します。元に戻せません。よろしいですか？')) return;
+    setError('');
+    setPatchingId(id);
+    const res = await fetch('/api/feedback', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    setPatchingId(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? '削除に失敗しました');
+      return;
+    }
+    fetchData();
+  };
+
   const handlePatch = async (id: string, status: FeedbackStatus) => {
     setError('');
     setPatchingId(id);
@@ -142,6 +161,17 @@ export default function HqFeedbackPage() {
                   {item.app_version && (
                     <span className="text-[10px] text-slate-400 tabular-nums">v{item.app_version}</span>
                   )}
+                  {/* 「どのIssueか」は本文より先に知りたい情報なので、種別・店舗と同じ行に置く */}
+                  {item.github_issue_number && GITHUB_REPO && (
+                    <a
+                      href={`https://github.com/${GITHUB_REPO}/issues/${item.github_issue_number}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] px-1.5 py-px rounded font-medium border bg-slate-50 text-blue-700 border-slate-200 hover:bg-blue-50 tabular-nums"
+                    >
+                      Issue #{item.github_issue_number}
+                    </a>
+                  )}
                 </div>
                 <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">{formatDateTime(item.created_at)}</span>
               </div>
@@ -149,27 +179,27 @@ export default function HqFeedbackPage() {
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{item.body}</p>
 
               <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between gap-2">
-                {item.github_issue_number && GITHUB_REPO ? (
-                  <a
-                    href={`https://github.com/${GITHUB_REPO}/issues/${item.github_issue_number}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-700 hover:text-blue-800 underline underline-offset-2 tabular-nums"
-                  >
-                    Issue #{item.github_issue_number}
-                  </a>
-                ) : (
+                {!item.github_issue_number && (
                   <span className="text-xs text-slate-400">Issue未作成</span>
                 )}
-
+                <div className="flex gap-2 ml-auto">
                 {item.status === 'done' ? (
-                  <button
-                    onClick={() => handlePatch(item.id, 'new')}
-                    disabled={patchingId === item.id}
-                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                  >
-                    {patchingId === item.id ? '処理中…' : '未対応に戻す'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      disabled={patchingId === item.id}
+                      className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    >
+                      削除
+                    </button>
+                    <button
+                      onClick={() => handlePatch(item.id, 'new')}
+                      disabled={patchingId === item.id}
+                      className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    >
+                      {patchingId === item.id ? '処理中…' : '未対応に戻す'}
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={() => handlePatch(item.id, 'done')}
@@ -179,6 +209,7 @@ export default function HqFeedbackPage() {
                     {patchingId === item.id ? '処理中…' : '対応済みにする'}
                   </button>
                 )}
+                </div>
               </div>
             </div>
           ))}

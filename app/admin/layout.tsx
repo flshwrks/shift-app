@@ -12,7 +12,7 @@ import UpdateToast from '@/components/UpdateToast';
 // 本部管理者専用レイアウト。店舗管理者用の中身は /s/[storeSlug]/admin/layout.tsx へ
 // 移設済みで、ここは /admin/login, /admin/stores のみを配下に持つ。
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -33,11 +33,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <AuthLoadingScreen />;
   }
 
-  const handleLogout = () => {
-    fetch('/api/logout', { method: 'POST' }).catch(() => {});
-    logout();
-    router.replace('/admin/login');
-  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -50,14 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               本部管理
             </span>
           </div>
-          <span className="text-xs text-slate-500 truncate max-w-[120px] flex-shrink-0">{user.name}</span>
+          {/* ユーザー名・ログアウトはメニュー(AppMenu)へ移した。
+              ヘッダーに全部並べると狭い画面で要素が重なって読めなくなっていた */}
           <AppMenu />
-          <button
-            onClick={handleLogout}
-            className="text-xs px-2.5 h-7 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 flex-shrink-0"
-          >
-            ログアウト
-          </button>
         </div>
       </header>
       <HqNav />

@@ -19,6 +19,26 @@ export default function AdminSettingsPage() {
   const months = getUpcomingMonths(6);
   const [periods, setPeriods] = useState<Record<string, string>>({});
   const [committedPeriods, setCommittedPeriods] = useState<Record<string, string>>({});
+  const [openFeedbackCount, setOpenFeedbackCount] = useState(0);
+
+  // 要望はナビに出さず、この画面から開く。未対応があることに気づけるよう件数を出す
+  useEffect(() => {
+    if (!storeId) return;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from('feedback')
+        .select('*', { count: 'exact', head: true })
+        .eq('store_id', storeId)
+        .eq('destination', 'store')
+        .neq('status', 'done');
+      setOpenFeedbackCount(count ?? 0);
+    };
+    fetchCount();
+    const channel = supabase.channel(`settings-feedback-${storeId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `store_id=eq.${storeId}` }, fetchCount)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [storeId]);
 
   useEffect(() => {
     const keys = months.flatMap(m => [
@@ -152,6 +172,27 @@ export default function AdminSettingsPage() {
         <div>
           <h3 className="font-semibold text-slate-700">アンケート管理</h3>
           <p className="text-xs text-slate-400 mt-0.5">スタッフへのアンケートを作成・公布・集計</p>
+        </div>
+        <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {/* 要望 */}
+      <button
+        onClick={() => router.push(`/s/${storeSlug}/admin/feedback`)}
+        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+      >
+        <div>
+          <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+            要望
+            {openFeedbackCount > 0 && (
+              <span className="min-w-[18px] h-[18px] bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                {openFeedbackCount > 9 ? '9+' : openFeedbackCount}
+              </span>
+            )}
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">スタッフから届いた要望・不具合を確認</p>
         </div>
         <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

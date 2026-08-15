@@ -62,6 +62,26 @@ export default function AdminFeedbackPage() {
   const doneItems = items.filter(i => i.status === 'done');
   const displayed = tab === 'open' ? openItems : doneItems;
 
+  // 対応済みのものだけ削除できる（未対応を読まずに消せてしまわないようにする）。
+  // 元に戻せない操作なので確認を挟む
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('この要望を削除します。元に戻せません。よろしいですか？')) return;
+    setError('');
+    setPatchingId(id);
+    const res = await fetch('/api/feedback', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    setPatchingId(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? '削除に失敗しました');
+      return;
+    }
+    fetchData();
+  };
+
   const handlePatch = async (id: string, status: FeedbackStatus) => {
     setError('');
     setPatchingId(id);
@@ -147,16 +167,25 @@ export default function AdminFeedbackPage() {
               <p className="text-sm font-semibold text-slate-800 mb-1">{item.user?.name ?? '不明なユーザー'}</p>
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{item.body}</p>
 
-              <div className="border-t border-slate-100 mt-3 pt-3 flex justify-end">
+              <div className="border-t border-slate-100 mt-3 pt-3 flex justify-end gap-2">
                 {item.status === 'done' ? (
-                  // 押し間違いから戻せるようにしておく（誤操作しないことを最優先にする方針）
-                  <button
-                    onClick={() => handlePatch(item.id, 'new')}
-                    disabled={patchingId === item.id}
-                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                  >
-                    {patchingId === item.id ? '処理中…' : '未対応に戻す'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      disabled={patchingId === item.id}
+                      className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                    >
+                      削除
+                    </button>
+                    {/* 押し間違いから戻せるようにしておく（誤操作しないことを最優先にする方針） */}
+                    <button
+                      onClick={() => handlePatch(item.id, 'new')}
+                      disabled={patchingId === item.id}
+                      className="px-3 py-1.5 bg-white border border-slate-300 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    >
+                      {patchingId === item.id ? '処理中…' : '未対応に戻す'}
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={() => handlePatch(item.id, 'done')}
