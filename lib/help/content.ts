@@ -11,9 +11,24 @@ export interface Step {
 
 export type SectionColor = 'blue' | 'green' | 'purple' | 'slate';
 
+// セクションのアイコン。以前は絵文字そのものを値にしていたが、
+// 対応表に無い絵文字がそのまま素の絵文字として描画され、SVGアイコンと混在していた。
+// 意味のある名前にして、components/icons.tsx 側で「全ての名前にSVGを割り当てる」ことを
+// 型（Record<SectionIconName, ...>）で強制する。名前を増やすと対応漏れがコンパイルエラーになる。
+export type SectionIconName =
+  | 'pencil'
+  | 'calendar'
+  | 'inbox'
+  | 'users'
+  | 'settings'
+  | 'clipboard'
+  | 'message'
+  | 'trending-up'
+  | 'building';
+
 export interface Section {
   id: string;
-  icon: string;
+  icon: SectionIconName;
   title: string;
   subtitle: string;
   color: SectionColor;
@@ -26,7 +41,7 @@ export interface Section {
 const staffSections: Section[] = [
   {
     id: 'shifts',
-    icon: '📝',
+    icon: 'pencil',
     title: 'シフト申請',
     subtitle: '希望シフトを入力して提出する',
     color: 'blue',
@@ -48,7 +63,7 @@ const staffSections: Section[] = [
   },
   {
     id: 'schedule',
-    icon: '📅',
+    icon: 'calendar',
     title: 'シフト確認',
     subtitle: '確定したシフト表を確認する',
     color: 'green',
@@ -68,7 +83,7 @@ const staffSections: Section[] = [
   },
   {
     id: 'requests',
-    icon: '📨',
+    icon: 'inbox',
     title: '調整依頼',
     subtitle: '管理者からのシフト依頼を確認・応答する',
     color: 'purple',
@@ -89,7 +104,7 @@ const staffSections: Section[] = [
   },
   {
     id: 'survey',
-    icon: '📊',
+    icon: 'clipboard',
     title: 'アンケート回答',
     subtitle: '管理者からのアンケートに回答する',
     color: 'slate',
@@ -104,7 +119,7 @@ const staffSections: Section[] = [
   },
   {
     id: 'feedback',
-    icon: '💬',
+    icon: 'message',
     title: '要望を送る',
     subtitle: 'お店の管理者やアプリの開発者に意見を届ける',
     color: 'slate',
@@ -125,7 +140,7 @@ const staffSections: Section[] = [
 const adminSections: Section[] = [
   {
     id: 'schedule',
-    icon: '📅',
+    icon: 'calendar',
     title: 'シフト管理',
     subtitle: 'スタッフのシフトを確認・編集・確定する',
     color: 'blue',
@@ -146,7 +161,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'requests',
-    icon: '📨',
+    icon: 'inbox',
     title: '調整依頼',
     subtitle: '人手不足の日にスタッフへシフトを依頼する',
     color: 'green',
@@ -168,7 +183,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'staff',
-    icon: '👥',
+    icon: 'users',
     title: 'スタッフ管理',
     subtitle: 'スタッフの登録・編集・並び替えを行う',
     color: 'purple',
@@ -186,7 +201,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'settings',
-    icon: '⚙️',
+    icon: 'settings',
     title: '設定',
     subtitle: 'シフト提出期間の管理と、各種メニューの入口',
     color: 'slate',
@@ -205,7 +220,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'labor-cost',
-    icon: '💰',
+    icon: 'trending-up',
     title: '人件費予測',
     subtitle: '設定から開く。月間の概算人件費を確認する',
     color: 'blue',
@@ -222,7 +237,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'survey',
-    icon: '📊',
+    icon: 'clipboard',
     title: 'アンケート管理',
     subtitle: '設定から開く。スタッフへのアンケートを作成・集計する',
     color: 'green',
@@ -239,7 +254,7 @@ const adminSections: Section[] = [
   },
   {
     id: 'feedback',
-    icon: '💬',
+    icon: 'message',
     title: '要望',
     subtitle: '設定から開く。スタッフから届いた要望・不具合報告を確認する',
     color: 'purple',
@@ -262,7 +277,7 @@ const adminSections: Section[] = [
 const hqSections: Section[] = [
   {
     id: 'stores',
-    icon: '🏢',
+    icon: 'building',
     title: '店舗管理',
     subtitle: '店舗の追加・編集・削除、ログインURLの管理',
     color: 'blue',
@@ -281,7 +296,7 @@ const hqSections: Section[] = [
   },
   {
     id: 'feedback',
-    icon: '💬',
+    icon: 'message',
     title: '要望（開発者へ）',
     subtitle: '全店舗から開発者へ届いた要望を確認する',
     color: 'purple',
@@ -300,7 +315,7 @@ const hqSections: Section[] = [
   },
   {
     id: 'menu',
-    icon: '⚙️',
+    icon: 'settings',
     title: 'メニュー（≡）',
     subtitle: '使い方・更新履歴を開く',
     color: 'slate',

@@ -1,3 +1,5 @@
+import type { SectionIconName } from '@/lib/help/content';
+
 type IconProps = React.SVGProps<SVGSVGElement>;
 
 // パスデータは Lucide (ISC License) 準拠。手書きせずここからコピーして使うこと。
@@ -148,19 +150,33 @@ export function IconHistory(props: IconProps) {
   );
 }
 
-/** components/HelpModal.tsx で使う、絵文字キー→SVGアイコンの対応表。
- *  HELP_CONTENT（lib/help/content.ts）の section.icon はこのマップのキーと同じ絵文字を使う。
- *  マップに無い絵文字は SectionIcon が素の絵文字にフォールバックする。 */
-const SECTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
-  '📝': IconPencil,
-  '📅': IconCalendar,
-  '📨': IconInbox,
-  '👥': IconUsers,
-  '⚙️': IconSettings,
+/** Lucide "building"。本部の店舗管理に使う */
+export function IconBuilding(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+      <path d="M9 22v-4h6v4" />
+      <path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" />
+    </svg>
+  );
+}
+
+/** ヘルプのセクションアイコン。HELP_CONTENT の SectionIconName に対応する。
+ *  Record で全名称を要求しているので、名前を増やして割り当てを忘れるとコンパイルエラーになる
+ *  （以前は絵文字キーの対応表で、漏れると素の絵文字がそのまま出ていた）。 */
+const SECTION_ICONS: Record<SectionIconName, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  pencil: IconPencil,
+  calendar: IconCalendar,
+  inbox: IconInbox,
+  users: IconUsers,
+  settings: IconSettings,
+  clipboard: IconClipboard,
+  message: IconMessageSquare,
+  'trending-up': IconTrendingUp,
+  building: IconBuilding,
 };
 
-export function SectionIcon({ icon, className = 'w-5 h-5 text-white' }: { icon: string; className?: string }) {
+export function SectionIcon({ icon, className = 'w-5 h-5 text-white' }: { icon: SectionIconName; className?: string }) {
   const Icon = SECTION_ICONS[icon];
-  if (!Icon) return <span>{icon}</span>;
   return <Icon className={className} />;
 }
