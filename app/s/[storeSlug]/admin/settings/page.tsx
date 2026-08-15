@@ -4,6 +4,11 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import { formatYM } from '@/lib/shifts';
+import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight } from '@/components/icons';
+
+// 提出期間は当面の1〜2ヶ月しか触らないのに6ヶ月分を常に並べていたため、
+// 設定画面が縦に長くなりすぎていた。手前の数ヶ月だけ出し、残りは畳む
+const ALWAYS_VISIBLE_MONTHS = 2;
 
 function getUpcomingMonths(count = 6): { year: number; month: number; label: string }[] {
   const now = new Date();
@@ -20,6 +25,7 @@ export default function AdminSettingsPage() {
   const [periods, setPeriods] = useState<Record<string, string>>({});
   const [committedPeriods, setCommittedPeriods] = useState<Record<string, string>>({});
   const [openFeedbackCount, setOpenFeedbackCount] = useState(0);
+  const [showAllMonths, setShowAllMonths] = useState(false);
 
   // 要望はナビに出さず、この画面から開く。未対応があることに気づけるよう件数を出す
   useEffect(() => {
@@ -96,8 +102,8 @@ export default function AdminSettingsPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="font-semibold text-slate-700 mb-1">シフト提出期間</h3>
         <p className="text-xs text-slate-400 mb-4">月ごとに提出可能な期間を設定します。期間外はスタッフが提出できなくなります。未設定の月はいつでも提出可能です。</p>
-        <div className="space-y-5">
-          {months.map(({ year, month, label }) => {
+        <div className="space-y-4">
+          {(showAllMonths ? months : months.slice(0, ALWAYS_VISIBLE_MONTHS)).map(({ year, month, label }) => {
             const ym = formatYM(year, month);
             const openKey = `period_open_${ym}`;
             const closeKey = `period_close_${ym}`;
@@ -107,97 +113,97 @@ export default function AdminSettingsPage() {
             const hasPeriod = openVal || closeVal;
             return (
               <div key={ym}>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-baseline justify-between gap-2 mb-1.5">
                   <p className="text-sm font-medium text-slate-600">{label}</p>
                   {hasPeriod && (
-                    <button onClick={() => clearPeriod(year, month)} className="text-xs text-red-400 hover:text-red-600">
-                      解除
-                    </button>
+                    <p className="text-xs text-slate-400 tabular-nums truncate">
+                      {openVal ? new Date(openVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'} 〜 {closeVal ? new Date(closeVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'}
+                    </p>
                   )}
                 </div>
+                {/* min-w-0 が無いと、date入力が持つ最小幅より縮まず行がはみ出す
+                    （flexアイテムの min-width は既定が auto のため） */}
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
                     value={openVal}
                     onChange={e => setPeriods(prev => ({ ...prev, [openKey]: e.target.value }))}
-                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                   <span className="text-slate-400 text-sm flex-shrink-0">〜</span>
                   <input
                     type="date"
                     value={closeVal}
                     onChange={e => setPeriods(prev => ({ ...prev, [closeKey]: e.target.value }))}
-                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
-                  <button
-                    onClick={() => savePeriod(year, month)}
-                    disabled={isUnchanged}
-                    className={`px-3 py-2 text-sm font-medium rounded-lg flex-shrink-0 transition-colors ${
-                      isUnchanged ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    保存
-                  </button>
                 </div>
-                {hasPeriod && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    提出可能期間: {openVal ? new Date(openVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'} 〜 {closeVal ? new Date(closeVal + 'T00:00:00').toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '?'}
-                  </p>
+                {/* 操作ボタンは必要なときだけ出す。常に置くと縦に伸びて一覧性が落ちる */}
+                {(!isUnchanged || hasPeriod) && (
+                  <div className="flex justify-end gap-2 mt-1.5">
+                    {hasPeriod && (
+                      <button onClick={() => clearPeriod(year, month)} className="px-3 py-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        解除
+                      </button>
+                    )}
+                    {!isUnchanged && (
+                      <button
+                        onClick={() => savePeriod(year, month)}
+                        className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      >
+                        保存
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
+
+        {months.length > ALWAYS_VISIBLE_MONTHS && (
+          <button
+            onClick={() => setShowAllMonths(v => !v)}
+            className="mt-4 w-full py-2 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors"
+          >
+            {showAllMonths ? '先の月を閉じる' : `先の月も設定する（あと${months.length - ALWAYS_VISIBLE_MONTHS}ヶ月）`}
+          </button>
+        )}
       </div>
 
-      {/* 人件費予測 */}
-      <button
-        onClick={() => router.push(`/s/${storeSlug}/admin/labor-cost`)}
-        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-      >
-        <div>
-          <h3 className="font-semibold text-slate-700">人件費予測</h3>
-          <p className="text-xs text-slate-400 mt-0.5">月別の労働時間 × 時給で概算人件費を確認</p>
+      {/* 管理メニュー: 同じ見た目の白いボタンが並ぶと区別がつかず、押せることも伝わりにくい。
+          色付きのアイコンタイルで種類を見分けられるようにする（配色はヘルプの
+          セクション色と同じ言語を使い、新しい配色を持ち込まない） */}
+      <div>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-2">管理メニュー</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            { path: 'labor-cost', title: '人件費予測', desc: '労働時間 × 時給で概算を確認', Icon: IconTrendingUp, tile: 'bg-blue-600', badge: 0 },
+            { path: 'survey', title: 'アンケート管理', desc: '作成・公布・集計', Icon: IconClipboard, tile: 'bg-green-600', badge: 0 },
+            { path: 'feedback', title: '要望', desc: 'スタッフから届いた要望・不具合', Icon: IconMessageSquare, tile: 'bg-violet-600', badge: openFeedbackCount },
+          ].map(item => (
+            <button
+              key={item.path}
+              onClick={() => router.push(`/s/${storeSlug}/admin/${item.path}`)}
+              className="bg-white rounded-xl border border-slate-200 p-4 flex sm:flex-col items-center sm:items-start gap-3 hover:bg-slate-50 hover:border-slate-300 transition-colors text-left"
+            >
+              <div className={`relative w-10 h-10 rounded-lg ${item.tile} flex items-center justify-center flex-shrink-0`}>
+                <item.Icon className="w-5 h-5 text-white" />
+                {item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-orange-500 text-white text-[10px] font-bold rounded-full border-2 border-white flex items-center justify-center px-0.5">
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
+              </div>
+              <IconChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0 sm:hidden" />
+            </button>
+          ))}
         </div>
-        <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-
-      {/* アンケート */}
-      <button
-        onClick={() => router.push(`/s/${storeSlug}/admin/survey`)}
-        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-      >
-        <div>
-          <h3 className="font-semibold text-slate-700">アンケート管理</h3>
-          <p className="text-xs text-slate-400 mt-0.5">スタッフへのアンケートを作成・公布・集計</p>
-        </div>
-        <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-
-      {/* 要望 */}
-      <button
-        onClick={() => router.push(`/s/${storeSlug}/admin/feedback`)}
-        className="w-full bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-      >
-        <div>
-          <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-            要望
-            {openFeedbackCount > 0 && (
-              <span className="min-w-[18px] h-[18px] bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-                {openFeedbackCount > 9 ? '9+' : openFeedbackCount}
-              </span>
-            )}
-          </h3>
-          <p className="text-xs text-slate-400 mt-0.5">スタッフから届いた要望・不具合を確認</p>
-        </div>
-        <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
+      </div>
 
       {/* シフト種別一覧 */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">

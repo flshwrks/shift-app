@@ -118,6 +118,16 @@ export function IconMessageSquare(props: IconProps) {
   );
 }
 
+/** Lucide "trending-up"。人件費「予測」に使う */
+export function IconTrendingUp(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
+    </svg>
+  );
+}
+
 /** Lucide "menu"（ハンバーガー）。ヘッダーのメニューボタンに使う */
 export function IconMenu(props: IconProps) {
   return (

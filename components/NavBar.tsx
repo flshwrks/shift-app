@@ -147,21 +147,19 @@ export default function NavBar() {
           2つのアプリを行き来したときに「別のサービス」に見える */}
       <header className="bg-white/90 backdrop-blur border-b border-slate-300 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 flex items-center h-[52px] gap-2">
-          {/* ヘッダーに置くのは「今どの店舗を見ているか」だけにする。
-              ユーザー名・本部管理へ戻る・ログアウトはメニュー(AppMenu)へ移した。
-              全部を横並びにすると、店舗名が truncate で潰れたり、
+          {/* ヘッダーに置くのは「どの店舗を見ているか」と「誰でログインしているか」の2つだけ。
+              アプリ名はブランドマークで足りるので文字では出さない。
+              本部管理へ戻る・ログアウトはメニュー(AppMenu)へ移した。
+              以前は全部を横並びにしていたため、店舗名が truncate で潰れたり、
               本部管理者では要素が重なって読めなくなっていた */}
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <BrandMark size="sm" />
-            {/* 狭い画面ではアプリ名を省き、店舗名に幅を譲る（ブランドマークで識別できる） */}
-            <span className="hidden sm:inline text-[13px] font-semibold text-slate-900 whitespace-nowrap">シフト管理</span>
-            {orgName && (
-              <>
-                <span className="hidden sm:inline text-slate-300 text-sm">|</span>
-                <span className="text-[13px] text-slate-600 truncate">{orgName}</span>
-              </>
-            )}
+            {orgName && <span className="text-[13px] text-slate-600 truncate">{orgName}</span>}
           </div>
+          {user?.name && (
+            // 店舗名が長いときは店舗名側が縮む。名前は取り違えると困るので縮ませない
+            <span className="text-[13px] font-medium text-slate-900 truncate max-w-[6rem] flex-shrink-0">{user.name}</span>
+          )}
           <AppMenu />
         </div>
       </header>

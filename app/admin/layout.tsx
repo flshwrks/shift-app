@@ -45,8 +45,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               本部管理
             </span>
           </div>
-          {/* ユーザー名・ログアウトはメニュー(AppMenu)へ移した。
+          {/* 「誰でログインしているか」は残し、ログアウト等はメニュー(AppMenu)へ移した。
               ヘッダーに全部並べると狭い画面で要素が重なって読めなくなっていた */}
+          <span className="text-[13px] font-medium text-slate-900 truncate max-w-[6rem] flex-shrink-0">{user.name}</span>
           <AppMenu />
         </div>
       </header>
