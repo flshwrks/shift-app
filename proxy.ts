@@ -37,6 +37,11 @@ const LEGACY_DEFAULT_SLUG = 'main';
 // 旧 /admin/* 配下のページ名。新 /admin/* は本部専用(login, stores)に
 // 意味が変わっているため、旧ページ名だけを狙い撃ちして転送する
 // （/admin/login・/admin/stores は下のガードにそのまま素通りさせる）。
+// 多店舗対応前に /admin/<page> だった店舗管理画面。これらは /s/[slug]/admin/<page> へ転送する。
+// ★'feedback' は絶対にこの集合へ入れないこと★
+// /admin/feedback は「本部管理者が開発者宛ての要望を見る画面」であって、店舗の受信箱ではない。
+// 店舗の受信箱は /s/[slug]/admin/feedback にあるが、多店舗対応前に /admin/feedback という
+// URLは存在しなかったので転送する必要もない。ここに追加すると本部の受信箱へ到達できなくなる。
 const LEGACY_STORE_ADMIN_PAGES = new Set(['schedule', 'requests', 'staff', 'settings', 'survey', 'labor-cost']);
 
 export function proxy(request: NextRequest) {
