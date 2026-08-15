@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import type { ShiftRequest, ShiftRequestTarget } from '@/lib/types';
 import { SHIFT_PRESETS } from '@/lib/types';
+import { IconInbox, IconClipboard } from '@/components/icons';
 
 type Tab = 'pending' | 'past';
 
@@ -243,7 +244,9 @@ export default function StaffRequestsPage() {
 
       {displayedRequests.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
-          <p className="text-3xl mb-2">{tab === 'pending' ? '📭' : '📋'}</p>
+          <p className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+            {tab === 'pending' ? <IconInbox className="w-6 h-6 text-slate-400" /> : <IconClipboard className="w-6 h-6 text-slate-400" />}
+          </p>
           <p className="text-sm">{tab === 'pending' ? '未対応の依頼はありません' : '過去の依頼はありません'}</p>
         </div>
       ) : (

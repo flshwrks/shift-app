@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import type { Feedback, FeedbackStatus } from '@/lib/types';
+import EmptyState from '@/components/EmptyState';
+import BackToSettings from '@/components/BackToSettings';
 
 type Tab = 'open' | 'done';
 
@@ -105,6 +107,7 @@ export default function AdminFeedbackPage() {
 
   return (
     <div>
+      <BackToSettings />
       <h2 className="text-lg font-semibold tracking-tight text-slate-900">要望・不具合</h2>
       <p className="text-[13px] text-slate-500 mt-1 mb-4">
         スタッフが「管理者へ」宛てに送ったものです。「開発者へ」宛てのものはここには届きません。
@@ -139,16 +142,17 @@ export default function AdminFeedbackPage() {
       {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
 
       {displayed.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <p className="text-3xl mb-2">{tab === 'open' ? '📭' : '✅'}</p>
-          <p className="text-sm">{tab === 'open' ? '未対応の要望はありません' : '対応済みの要望はありません'}</p>
+        <EmptyState
+          icon={tab === 'open' ? 'inbox' : 'check'}
+          message={tab === 'open' ? '未対応の要望はありません' : '対応済みの要望はありません'}
+        >
           {/* 「片方のタブが空」だけを見て何も無いと誤解されないよう、もう一方の件数を出す */}
           {tab === 'open' && doneItems.length > 0 && (
             <button onClick={() => setTab('done')} className="mt-2 text-xs text-blue-700 underline underline-offset-2">
               対応済みが{doneItems.length}件あります
             </button>
           )}
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {displayed.map(item => (

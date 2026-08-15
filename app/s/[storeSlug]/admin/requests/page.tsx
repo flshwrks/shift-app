@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import ShiftRequestModal from '@/components/ShiftRequestModal';
-import { IconChevronLeft, IconChevronRight } from '@/components/icons';
+import { IconChevronLeft, IconChevronRight, IconClipboard, IconCheck, IconX, IconAlertTriangle } from '@/components/icons';
 import type { ShiftRequest, ShiftRequestTarget, User } from '@/lib/types';
 
 type Tab = 'open' | 'fulfilled';
@@ -186,7 +186,9 @@ export default function AdminRequestsPage() {
 
       {displayed.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
-          <p className="text-3xl mb-2">{tab === 'open' ? '📋' : '✅'}</p>
+          <p className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+            {tab === 'open' ? <IconClipboard className="w-6 h-6 text-slate-400" /> : <IconCheck className="w-6 h-6 text-slate-400" />}
+          </p>
           <p className="text-sm">
             {tab === 'open' ? '募集中の依頼はありません' : '承諾済みの依頼はありません'}
           </p>
@@ -239,7 +241,11 @@ export default function AdminRequestsPage() {
                               'bg-slate-50 text-slate-500 border border-slate-200'
                             }`}>
                               {t.user?.name ?? '—'}
-                              <span>{t.status === 'accepted' ? '✓' : t.status === 'declined' ? '✗' : '…'}</span>
+                              <span className="flex items-center">
+                                {t.status === 'accepted' ? <IconCheck className="w-3.5 h-3.5" />
+                                  : t.status === 'declined' ? <IconX className="w-3.5 h-3.5" />
+                                  : '…'}
+                              </span>
                             </span>
                           ))}
                         </div>
@@ -267,7 +273,7 @@ export default function AdminRequestsPage() {
                       </div>
                       {isConfirmed ? (
                         <div className="flex items-center gap-1.5 text-emerald-600">
-                          <span className="text-base">✅</span>
+                          <IconCheck className="w-4 h-4" />
                           <span className="text-sm font-medium">確定済み</span>
                         </div>
                       ) : (
@@ -313,12 +319,16 @@ export default function AdminRequestsPage() {
             <h3 className="text-base font-semibold text-slate-900 mb-2">依頼を取り消しますか？</h3>
             {blockedByConfirmed ? (
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
-                <p className="text-sm text-red-700 font-medium">⚠️ このシフトはすでに確定済みです</p>
+                <p className="text-sm text-red-700 font-medium flex items-center gap-1.5">
+                  <IconAlertTriangle className="w-4 h-4 flex-shrink-0" />このシフトはすでに確定済みです
+                </p>
                 <p className="text-sm text-red-600 mt-0.5">取消するには、シフト管理画面から直接シフトを削除してください</p>
               </div>
             ) : acceptedTarget ? (
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
-                <p className="text-sm text-red-700 font-medium">⚠️ {acceptedTarget.user?.name ?? '承諾済みのスタッフ'} が承諾済みです</p>
+                <p className="text-sm text-red-700 font-medium flex items-center gap-1.5">
+                  <IconAlertTriangle className="w-4 h-4 flex-shrink-0" />{acceptedTarget.user?.name ?? '承諾済みのスタッフ'} が承諾済みです
+                </p>
                 <p className="text-sm text-red-600 mt-0.5">取消すると、登録された下書きシフトも削除されます</p>
               </div>
             ) : (

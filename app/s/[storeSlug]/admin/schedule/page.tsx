@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import { useTableExport } from '@/lib/useTableExport';
-import { IconChevronLeft, IconChevronRight, IconDownload } from '@/components/icons';
+import { IconChevronLeft, IconChevronRight, IconDownload, IconCheck } from '@/components/icons';
 
 type ViewMode = 'table' | 'timeline';
 
@@ -476,7 +476,7 @@ export default function AdminSchedulePage() {
                     copied ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
-                  {copied ? '✓ コピーしました' : 'リマインダーをクリップボードにコピー'}
+                  {copied ? <span className="flex items-center justify-center gap-1.5"><IconCheck className="w-4 h-4" />コピーしました</span> : 'リマインダーをクリップボードにコピー'}
                 </button>
                 <p className="text-[11px] text-slate-400 mt-2 text-center">LINE・メール等に貼り付けて送信できます</p>
               </>

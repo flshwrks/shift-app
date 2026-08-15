@@ -8,6 +8,7 @@ import NavBar from '@/components/NavBar';
 import LoginNotificationModal from '@/components/LoginNotificationModal';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
 import UpdateToast from '@/components/UpdateToast';
+import ScrollToTop from '@/components/ScrollToTop';
 
 // 店舗コンテキストは親の /s/[storeSlug]/layout.tsx が StoreProvider で
 // 一度だけ配っている想定なので、ここでは useStore() で受け取るだけでよい。
@@ -30,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen flex flex-col">
       <NavBar />
+      <ScrollToTop />
       <LoginNotificationModal />
       <UpdateToast />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6">

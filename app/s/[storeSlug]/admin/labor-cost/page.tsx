@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import { monthStart, monthEnd, netWorkMinutes } from '@/lib/shifts';
 import type { User, Shift } from '@/lib/types';
+import { IconAlertTriangle } from '@/components/icons';
+import BackToSettings from '@/components/BackToSettings';
 
 const DEFAULT_WAGE = 1268; // 神奈川県最低賃金 (2024年10月〜)
 
@@ -21,7 +22,6 @@ function monthLabel(year: number, month: number) {
 }
 
 export default function LaborCostPage() {
-  const router = useRouter();
   const { storeId } = useStore();
   const tabs = useMemo(buildMonthTabs, []);
   const [tabIdx, setTabIdx] = useState(2);
@@ -95,14 +95,8 @@ export default function LaborCostPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h2 className="text-xl font-bold text-slate-800">人件費予測</h2>
-      </div>
+      <BackToSettings />
+      <h2 className="text-xl font-bold text-slate-800 mb-6">人件費予測</h2>
 
       {/* 月タブ */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-6 no-scrollbar">
@@ -220,7 +214,9 @@ export default function LaborCostPage() {
       </div>
 
       <div className="mt-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1">
-        <p className="font-medium">⚠ この数値はあくまで概算です</p>
+        <p className="font-medium flex items-center gap-1.5">
+          <IconAlertTriangle className="w-4 h-4 flex-shrink-0" />この数値はあくまで概算です
+        </p>
         <p>シフト変更・残業・深夜割増賃金・各種手当・社会保険料等により、実際の人件費は大きく異なる場合があります。</p>
         <p className="text-amber-600">※ デフォルト時給は神奈川県最低賃金（2024年10月1日時点）¥{DEFAULT_WAGE.toLocaleString()}/h を設定しています。各スタッフの実際の時給に合わせて調整してください。</p>
       </div>

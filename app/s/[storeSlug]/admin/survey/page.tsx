@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
+import { IconX } from '@/components/icons';
+import BackToSettings from '@/components/BackToSettings';
 
 interface SurveyOption {
   id: string;
@@ -118,6 +120,7 @@ export default function AdminSurveyPage() {
 
   return (
     <div className="space-y-6 max-w-lg">
+      <BackToSettings />
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-800">アンケート管理</h2>
         {!creating && (
@@ -164,7 +167,9 @@ export default function AdminSurveyPage() {
                     className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                   {optionLabels.length > 2 && (
-                    <button onClick={() => removeOption(i)} className="text-red-400 hover:text-red-600 px-2">✕</button>
+                    <button onClick={() => removeOption(i)} aria-label="この選択肢を削除" className="text-red-400 hover:text-red-600 px-2">
+                      <IconX className="w-4 h-4" />
+                    </button>
                   )}
                 </div>
               ))}

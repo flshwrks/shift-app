@@ -550,7 +550,7 @@ export default function ShiftsPage() {
                     copyTargets.has(key) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 text-slate-300'
                   }`}
                 >
-                  {copyTargets.has(key) ? '✓' : ''}
+                  {copyTargets.has(key) ? <IconCheck className="w-4 h-4" /> : ''}
                 </button>
               )}
 
@@ -611,7 +611,7 @@ export default function ShiftsPage() {
                 : 'bg-blue-600 text-white shadow-sm'
             }`}
           >
-            {submitting ? '提出中…' : submitDone ? '✓ 提出完了' : dirtyCount > 0 ? `${dirtyCount}日分をまとめて提出` : '変更なし'}
+            {submitting ? '提出中…' : submitDone ? <span className="flex items-center justify-center gap-1.5"><IconCheck className="w-5 h-5" />提出完了</span> : dirtyCount > 0 ? `${dirtyCount}日分をまとめて提出` : '変更なし'}
           </button>
         </div>
       )}

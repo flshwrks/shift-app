@@ -8,6 +8,7 @@ import BrandMark from '@/components/BrandMark';
 import AppMenu from '@/components/AppMenu';
 import HqNav from '@/components/HqNav';
 import UpdateToast from '@/components/UpdateToast';
+import ScrollToTop from '@/components/ScrollToTop';
 
 // 本部管理者専用レイアウト。店舗管理者用の中身は /s/[storeSlug]/admin/layout.tsx へ
 // 移設済みで、ここは /admin/login, /admin/stores のみを配下に持つ。
@@ -52,6 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
       <HqNav />
+      <ScrollToTop />
       <UpdateToast />
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {children}

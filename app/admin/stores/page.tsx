@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Store } from '@/lib/types';
+import { IconCheck } from '@/components/icons';
 
 export default function AdminStoresPage() {
   const router = useRouter();
@@ -186,7 +187,7 @@ export default function AdminStoresPage() {
                       className={`text-xs px-3 py-1.5 rounded-lg transition-colors mr-1 ${
                         copiedId === s.id ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 hover:bg-slate-100'
                       }`}>
-                      {copiedId === s.id ? '✓ コピーしました' : 'ログインURLをコピー'}
+                      {copiedId === s.id ? <span className="flex items-center justify-center gap-1.5"><IconCheck className="w-4 h-4" />コピーしました</span> : 'ログインURLをコピー'}
                     </button>
                     <button onClick={() => router.push(`/s/${s.slug}/admin/schedule`)}
                       className="text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors mr-1">

@@ -9,6 +9,7 @@ import LoginNotificationModal from '@/components/LoginNotificationModal';
 import SurveyModal from '@/components/SurveyModal';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
 import UpdateToast from '@/components/UpdateToast';
+import ScrollToTop from '@/components/ScrollToTop';
 
 interface SurveyWithOptions {
   id: string;
@@ -69,6 +70,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen flex flex-col">
       <NavBar />
+      <ScrollToTop />
       <LoginNotificationModal />
       {survey && (
         <SurveyModal
