@@ -120,4 +120,6 @@ export interface Feedback {
   github_issue_number: number | null;
   created_at: string;
   user?: User;
+  // 本部の受信箱では全店舗を横断して表示するため、どの店舗から届いたかを埋め込みJOINで取る
+  store?: { name: string; slug: string };
 }

@@ -63,6 +63,8 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: readAppVersion(),
     NEXT_PUBLIC_RELEASE_HISTORY: readReleaseHistory(),
+    // 本部の受信箱からGitHub Issueへリンクするために使う。リポジトリ名は機微情報ではない
+    NEXT_PUBLIC_FEEDBACK_REPO: process.env.GITHUB_FEEDBACK_REPO || 'flshwrks/shift-app',
   },
 };
 

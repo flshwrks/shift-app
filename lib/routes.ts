@@ -7,6 +7,7 @@ import { canAccessAdmin, isHqRole, type UserRole } from './types';
 
 export const HQ_HOME = '/admin/stores';
 export const HQ_LOGIN = '/admin/login';
+export const HQ_FEEDBACK = '/admin/feedback';
 
 export function storeLoginPath(storeSlug: string): string {
   return `/s/${storeSlug}/login`;

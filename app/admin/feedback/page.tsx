@@ -1,14 +1,23 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useStore } from '@/lib/store';
 import type { Feedback, FeedbackStatus } from '@/lib/types';
 
-type Tab = 'open' | 'done';
+// 本部管理者だけが見る、「開発者へ」宛ての要望の受信箱（全店舗横断）。
+//
+// 店舗の受信箱（/s/[storeSlug]/admin/feedback）とは宛先で完全に分けている:
+//   - 店舗の受信箱 = destination 'store'（管理者へ）… その店舗の管理者が対応する
+//   - この画面      = destination 'dev'  （開発者へ）… アプリの作り手が対応する
+// 同じ画面に混ぜると「誰が対応すべき要望なのか」が曖昧になるため、置き場を分けた。
+//
+// RLS上、本部管理者(is_hq_admin)は全店舗の全要望が見える。ここでは
+// destination='dev' に絞ることで、店舗の管理者宛ての要望が紛れ込まないようにしている。
+
+const GITHUB_REPO = process.env.NEXT_PUBLIC_FEEDBACK_REPO ?? '';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}（${'日月火水木金土'[d.getDay()]}） ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 const CATEGORY_LABEL: Record<Feedback['category'], string> = { request: '要望', bug: '不具合' };
@@ -16,21 +25,10 @@ const CATEGORY_STYLE: Record<Feedback['category'], string> = {
   request: 'bg-violet-50 text-violet-700 border-violet-200',
   bug: 'bg-red-50 text-red-500 border-red-100',
 };
-// 状態は「未対応」と「対応済み」の2つだけを見せる。
-// DBには 'read'（既読）もあるが、画面上で未読/既読/対応済みの3段階を出すと
-// 「既読にしただけの要望が『対応済み』タブに並ぶ」という分かりにくさが生じたため、
-// UIとしては done かどうかだけで扱う。
-const STATUS_LABEL: Record<FeedbackStatus, string> = { new: '未対応', read: '未対応', done: '対応済み' };
-const STATUS_STYLE: Record<FeedbackStatus, string> = {
-  new: 'bg-blue-50 text-blue-700 border-blue-200',
-  read: 'bg-blue-50 text-blue-700 border-blue-200',
-  done: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-};
 
-export default function AdminFeedbackPage() {
-  // hq_admin(本部管理者)がこのページを開いた場合もRLS上は全店の要望が見えるが、
-  // 「今表示している店舗」に絞り込むためクエリ側でも明示的にstore_idで絞る
-  const { storeId } = useStore();
+type Tab = 'open' | 'done';
+
+export default function HqFeedbackPage() {
   const [tab, setTab] = useState<Tab>('open');
   const [items, setItems] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,23 +38,22 @@ export default function AdminFeedbackPage() {
   const fetchData = useCallback(async () => {
     const { data, error: fetchError } = await supabase
       .from('feedback')
-      .select('*, user:users(name)')
-      .eq('store_id', storeId)
-      .eq('destination', 'store')
+      .select('*, user:users(name), store:stores(name, slug)')
+      .eq('destination', 'dev')
       .order('created_at', { ascending: false });
     // 取得エラーを握りつぶすと「0件」と「読めていない」が区別できなくなるので画面に出す
     if (fetchError) setError(fetchError.message);
     setItems((data as Feedback[]) ?? []);
     setLoading(false);
-  }, [storeId]);
+  }, []);
 
   useEffect(() => {
     fetchData();
-    const channel = supabase.channel(`admin-feedback-${storeId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `store_id=eq.${storeId}` }, fetchData)
+    const channel = supabase.channel('hq-feedback')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, fetchData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchData, storeId]);
+  }, [fetchData]);
 
   const openItems = items.filter(i => i.status !== 'done');
   const doneItems = items.filter(i => i.status === 'done');
@@ -85,16 +82,15 @@ export default function AdminFeedbackPage() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold tracking-tight text-slate-900">要望・不具合</h2>
+      <h2 className="text-lg font-semibold tracking-tight text-slate-900">開発者へ届いた要望</h2>
       <p className="text-[13px] text-slate-500 mt-1 mb-4">
-        スタッフが「管理者へ」宛てに送ったものです。「開発者へ」宛てのものはここには届きません。
+        全店舗のスタッフが「開発者へ」宛てに送ったものです。各店舗の管理者宛ての要望は、店舗ごとの管理画面にあります。
       </p>
 
-      {/* タブ */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-4">
         <button
           onClick={() => setTab('open')}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors relative ${tab === 'open' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'open' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
         >
           未対応
           {openItems.length > 0 && (
@@ -138,18 +134,35 @@ export default function AdminFeedbackPage() {
                   <span className={`text-[10px] px-1.5 py-px rounded font-medium border ${CATEGORY_STYLE[item.category]}`}>
                     {CATEGORY_LABEL[item.category]}
                   </span>
-                  <span className={`text-[10px] px-1.5 py-px rounded font-medium border ${STATUS_STYLE[item.status]}`}>
-                    {STATUS_LABEL[item.status]}
-                  </span>
+                  {item.store && (
+                    <span className="text-[10px] px-1.5 py-px rounded font-medium border bg-slate-50 text-slate-600 border-slate-200">
+                      {item.store.name}
+                    </span>
+                  )}
+                  {item.app_version && (
+                    <span className="text-[10px] text-slate-400 tabular-nums">v{item.app_version}</span>
+                  )}
                 </div>
                 <span className="text-xs text-slate-400 tabular-nums whitespace-nowrap">{formatDateTime(item.created_at)}</span>
               </div>
               <p className="text-sm font-semibold text-slate-800 mb-1">{item.user?.name ?? '不明なユーザー'}</p>
               <p className="text-sm text-slate-600 whitespace-pre-wrap">{item.body}</p>
 
-              <div className="border-t border-slate-100 mt-3 pt-3 flex justify-end">
+              <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between gap-2">
+                {item.github_issue_number && GITHUB_REPO ? (
+                  <a
+                    href={`https://github.com/${GITHUB_REPO}/issues/${item.github_issue_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-700 hover:text-blue-800 underline underline-offset-2 tabular-nums"
+                  >
+                    Issue #{item.github_issue_number}
+                  </a>
+                ) : (
+                  <span className="text-xs text-slate-400">Issue未作成</span>
+                )}
+
                 {item.status === 'done' ? (
-                  // 押し間違いから戻せるようにしておく（誤操作しないことを最優先にする方針）
                   <button
                     onClick={() => handlePatch(item.id, 'new')}
                     disabled={patchingId === item.id}
