@@ -7,10 +7,10 @@ import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { isHqRole } from '@/lib/types';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { HQ_HOME, HQ_LOGIN, storeLoginPath } from '@/lib/routes';
+import { HQ_HOME, HQ_LOGIN, storeLoginPath, FULL_GUIDE_URL } from '@/lib/routes';
 import HelpModal from '@/components/HelpModal';
 import FeedbackModal from '@/components/FeedbackModal';
-import { IconMenu, IconHelp, IconHistory, IconMessageSquare } from '@/components/icons';
+import { IconMenu, IconHelp, IconHistory, IconMessageSquare, IconExternalLink } from '@/components/icons';
 
 // ヘッダー右上のメニュー。
 //
@@ -87,6 +87,19 @@ export default function AppMenu() {
             <IconHelp className="w-4 h-4 text-slate-400 flex-shrink-0" />
             使い方
           </button>
+
+          {/* アプリ内ヘルプの「もっと詳しく」。別タブで開くので、
+              操作の途中でも今の画面を失わない */}
+          <a
+            href={FULL_GUIDE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            className={itemClass}
+          >
+            <IconExternalLink className="w-4 h-4 text-slate-400 flex-shrink-0" />
+            使い方（詳しい版）
+          </a>
 
           {canSendFeedback && (
             <button onClick={() => { setOpen(false); setShowFeedback(true); }} className={itemClass}>

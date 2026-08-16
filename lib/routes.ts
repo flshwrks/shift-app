@@ -9,6 +9,11 @@ export const HQ_HOME = '/admin/stores';
 export const HQ_LOGIN = '/admin/login';
 export const HQ_FEEDBACK = '/admin/feedback';
 
+// アプリ外にある「使い方の完全版」。役割ごとの手順を画面の図つきで載せた読み物で、
+// アプリ内ヘルプ（HelpModal）に入りきらない粒度をこちらが受け持つ。
+// アプリ内ヘルプ = 操作中に開く早見表、こちら = 最初に通して読む説明、という分担。
+export const FULL_GUIDE_URL = 'https://claude.ai/code/artifact/d20ce750-d2b4-4ceb-9392-ca5cf904bf1d';
+
 export function storeLoginPath(storeSlug: string): string {
   return `/s/${storeSlug}/login`;
 }
