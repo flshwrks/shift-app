@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { isHqRole } from '@/lib/types';
@@ -30,7 +29,6 @@ import { IconMenu, IconHelp, IconHistory, IconMessageSquare, IconExternalLink } 
 // ヘッダー(高さ52px)を基準に配置され、メニューが潰れて見えなくなる。
 export default function AppMenu() {
   const { user, logout } = useAuth();
-  const router = useRouter();
   // NavBar と同じく Provider 外で呼ばれてもクラッシュしないようにする
   const store = useStoreOptional();
   const storeSlug = store?.storeSlug ?? null;
@@ -48,14 +46,23 @@ export default function AppMenu() {
   const showBackToHq = isHq && !!storeSlug;
   const helpRole = user ? (isHq ? 'hq_admin' : user.role === 'staff' ? 'staff' : 'admin') : 'staff';
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (user) sessionStorage.removeItem(`login_notif_shown_${user.id}`);
-    fetch('/api/logout', { method: 'POST' }).catch(() => {});
     // 本部管理者は店舗の管理画面を横断して見られるため、storeSlugの有無だけで判定すると
     // 「本部管理者が今見ている店舗のログイン画面」に送られてしまう。ロールを先に見る。
     const destination = isHq ? HQ_LOGIN : storeSlug ? storeLoginPath(storeSlug) : HQ_LOGIN;
+
+    // Cookieを消し切ってから遷移する（遷移が先だとリクエストが中断されうる）
+    await fetch('/api/logout', { method: 'POST' }).catch(() => {});
     logout();
-    router.replace(destination);
+
+    // ★router.replace ではなく完全な遷移にする★
+    // logout() で user が null になると、店舗レイアウトの useEffect
+    // （未ログインなら店舗のログイン画面へ replace）が後から発火して、
+    // ここで決めた遷移先を上書きしてしまう。ログアウト後はロールが分からないので、
+    // レイアウト側では「この人は本部管理者だった」と判別できない。
+    // 完全な遷移にすれば、クライアント側のルーティングに割り込まれない。
+    window.location.replace(destination);
   };
 
   const itemClass =

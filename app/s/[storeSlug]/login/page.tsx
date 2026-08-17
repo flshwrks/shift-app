@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { homePathFor } from '@/lib/routes';
+import { homePathFor, HQ_LOGIN } from '@/lib/routes';
 import type { UserRole } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 import PinPad, { applyPinKey } from '@/components/PinPad';
@@ -192,7 +192,16 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="flex justify-end mt-4">
+        {/* 本部管理者が店舗の画面からログアウトすると、この画面に来ることがある。
+            そこから本部のログインへ戻る手段が無いと、URLを覚えていない限り詰む。
+            スタッフの邪魔にならないよう、控えめに置いておく */}
+        <div className="flex items-center justify-between mt-4">
+          <Link
+            href={HQ_LOGIN}
+            className="text-[11px] text-slate-400 hover:text-slate-600 px-1 py-1 rounded transition-colors"
+          >
+            本部管理者の方はこちら
+          </Link>
           <button
             onClick={() => { setDevMode(true); setPin(''); setError(''); }}
             className="text-[11px] text-slate-300 hover:text-slate-400 font-mono px-2 py-1 rounded transition-colors"
