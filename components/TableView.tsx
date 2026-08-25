@@ -200,8 +200,16 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
                           onClick={e => { e.stopPropagation(); onShiftClick?.(s); }}
                         >
                           {getShiftLabel(s)}
-                          {s.comment && <span className="w-1.5 h-1.5 rounded-full bg-white opacity-90 flex-shrink-0" />}
                         </button>
+                        {s.comment && (
+                          <span
+                            className="text-[10px] leading-snug text-slate-600 break-words line-clamp-2 max-w-[96px] cursor-pointer"
+                            title={s.comment}
+                            onClick={e => { e.stopPropagation(); onShiftClick?.(s); }}
+                          >
+                            {s.comment}
+                          </span>
+                        )}
                         {s.status === 'draft' && (
                           <span className="text-[10px] px-1.5 py-px rounded font-medium whitespace-nowrap bg-amber-50 text-amber-700 border border-amber-200">申請中</span>
                         )}

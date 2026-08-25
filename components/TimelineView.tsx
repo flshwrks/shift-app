@@ -270,6 +270,8 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                     const name = staffUser?.name ?? '?';
                     const isMe = currentUserId != null && s.user_id === currentUserId;
                     const isOther = currentUserId != null && !isMe;
+                    // コメント本文はブロックに収まるときだけ出し、収まらない場合は従来の白丸で存在だけ示す
+                    const showComment = !!s.comment && height >= 46 && w >= 56;
 
                     return (
                       <div
@@ -293,13 +295,18 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                             style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: w >= 60 ? 'ellipsis' : 'clip' }}>
                             {w >= 60 ? name : name.slice(0, 2)}
                           </span>
-                          {s.comment && w >= 48 && (
+                          {s.comment && !showComment && w >= 48 && (
                             <span className="w-2 h-2 rounded-full bg-white flex-shrink-0 mt-px opacity-90" />
                           )}
                         </div>
                         <span className="text-white/90 text-[9px] tabular-nums leading-tight truncate px-1">
                           {s.start_time}〜{s.end_time}
                         </span>
+                        {showComment && (
+                          <span className="text-white text-[9px] leading-snug px-1 pt-px break-words line-clamp-2 drop-shadow-sm">
+                            {s.comment}
+                          </span>
+                        )}
                         {isAdmin && s.status === 'draft' && onConfirm && height > 44 && (
                           <button
                             onClick={e => { e.stopPropagation(); onConfirm(s.id); }}
