@@ -2,20 +2,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
-import { monthStart, monthEnd, netWorkMinutes } from '@/lib/shifts';
+import { monthStart, monthEnd, netWorkMinutes, buildMonthTabs } from '@/lib/shifts';
 import type { User, Shift } from '@/lib/types';
 import { IconAlertTriangle } from '@/components/icons';
 import BackToSettings from '@/components/BackToSettings';
 
 const DEFAULT_WAGE = 1268; // 神奈川県最低賃金 (2024年10月〜)
-
-function buildMonthTabs() {
-  const now = new Date();
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 2 + i, 1);
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
-}
 
 function monthLabel(year: number, month: number) {
   return `${year}年${month + 1}月`;
@@ -23,7 +15,7 @@ function monthLabel(year: number, month: number) {
 
 export default function LaborCostPage() {
   const { storeId } = useStore();
-  const tabs = useMemo(buildMonthTabs, []);
+  const tabs = useMemo(() => buildMonthTabs(2), []);
   const [tabIdx, setTabIdx] = useState(2);
 
   const { year, month } = tabs[tabIdx];

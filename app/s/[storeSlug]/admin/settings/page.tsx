@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/lib/store';
 import { formatYM } from '@/lib/shifts';
-import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight } from '@/components/icons';
+import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight, IconDownload } from '@/components/icons';
 
 // 提出期間は当面の1〜2ヶ月しか触らないのに6ヶ月分を常に並べていたため、
 // 設定画面が縦に長くなりすぎていた。手前の数ヶ月だけ出し、残りは畳む
@@ -180,6 +180,7 @@ export default function AdminSettingsPage() {
           {[
             { path: 'labor-cost', title: '人件費予測', desc: '労働時間 × 時給で概算を確認', Icon: IconTrendingUp, tile: 'bg-blue-600', badge: 0 },
             { path: 'survey', title: 'アンケート管理', desc: '作成・公布・集計', Icon: IconClipboard, tile: 'bg-green-600', badge: 0 },
+            { path: 'kot', title: 'KING OF TIME 連携', desc: '確定シフトを勤怠システム用CSVに変換', Icon: IconDownload, tile: 'bg-slate-600', badge: 0 },
             { path: 'feedback', title: '要望', desc: 'スタッフから届いた要望・不具合', Icon: IconMessageSquare, tile: 'bg-violet-600', badge: openFeedbackCount },
           ].map(item => (
             <button

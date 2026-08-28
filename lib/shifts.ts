@@ -42,6 +42,19 @@ export function monthStart(year: number, month: number): string {
   return `${formatYM(year, month)}-01`;
 }
 
+/**
+ * 月タブ用に、今月を基準とした連続する月を返す。
+ * `monthsBack` ヶ月前から始めて `count` ヶ月分。人件費予測とKOT連携で共有している
+ * （同じ関数を各画面に持つと、片方だけ直して並びがずれる）。
+ */
+export function buildMonthTabs(monthsBack: number, count = 7): { year: number; month: number }[] {
+  const now = new Date();
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - monthsBack + i, 1);
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+}
+
 export function getDayLabel(date: Date): string {
   const day = date.getDate();
   const dow = DAY_NAMES_JA[date.getDay()];
