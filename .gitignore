@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 変数の一覧（値はすべてプレースホルダ）はリポジトリに入れる。
+# これが無いと、新しい担当者は「何を設定すれば動くのか」を知る手段が無い。
+!.env*.example
 
 # vercel
 .vercel

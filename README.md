@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# シフト管理アプリ
 
-## Getting Started
+飲食店のシフト提出・確定・共有を1か所で回すためのWebアプリ。スタッフはスマートフォンから
+希望シフトを提出し、店舗管理者が確定して、確定したシフト表を全員が見る。複数店舗と本部管理に対応している。
 
-First, run the development server:
+本番: Vercel（`master` への push で自動デプロイ）/ データ: Supabase（PostgreSQL）
+
+## ドキュメント
+
+**最初に読むもの**
+
+| 資料 | 内容 | 読む人 |
+|---|---|---|
+| [`docs/GUIDE.md`](docs/GUIDE.md) | 全機能の使い方（自動生成） | 全員 |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **運用ハンドブック**。アカウント・鍵・リリース・障害対応・引き継ぎ | 運用・引き継ぎ担当 |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | 監査の記録と、なぜこの作りなのか（脅威モデル） | 開発・セキュリティ確認 |
+| [`docs/SPEC.md`](docs/SPEC.md) | データモデル・ルーティング（技術資料） | 開発 |
+| [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | 配色・コンポーネントの約束 | 開発 |
+| [`CHANGELOG.md`](CHANGELOG.md) | 変更履歴（アプリ内の更新履歴ページにそのまま出る） | 全員 |
+| `improvement_list/` | 1計画1ファイルの改修記録。「なぜそうしたか」が残っている | 開発 |
+| [`CLAUDE.md`](CLAUDE.md) | 開発時の約束事（**DBを在庫管理アプリと共有している点に注意**） | 開発 |
+
+## 開発をはじめる
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local   # 値は運用担当者から受け取る（docs/OPERATIONS.md §3）
+npm install
+npm run dev                        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| コマンド | 用途 |
+|---|---|
+| `npm run dev` | 開発サーバー |
+| `npm run build` | 本番ビルド |
+| `npm run gen:guide` | ヘルプ（`lib/help/content.ts`）から `docs/GUIDE.md` を再生成 |
+| `npm run check:guide` | 上のズレを検出（CIと同じ） |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+CI（`.github/workflows/ci.yml`）は push / PR ごとに
+`npm audit` → `check:guide` → `tsc --noEmit` → `next build` を実行する。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 変更を出すときの約束
 
-## Learn More
+- `master` に直接コミットしない。ブランチ → プレビューで確認 → PR
+- 利用者に意味のある変更は `package.json` の版を上げ、`CHANGELOG.md` に日本語で書く
+- DBを変えるときは `supabase/migrations/` に追加し、**在庫管理アプリへの影響を確認する**
+  （`docs/OPERATIONS.md` §7）
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+詳細は [`docs/OPERATIONS.md`](docs/OPERATIONS.md) を参照。
