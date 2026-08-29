@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [isShaking, setIsShaking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [devMode, setDevMode] = useState(false);
+  const [devPassword, setDevPassword] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -47,27 +48,34 @@ export default function LoginPage() {
   const handlePinKey = (key: string, onComplete: (code: string) => void) =>
     applyPinKey(key, pin, setPin, () => setError(''), onComplete);
 
-  const handleDevKey = (key: string) => {
-    handlePinKey(key, async (code) => {
-      setIsLoading(true);
-      try {
-        const res = await fetch('/api/dev-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        });
-        const body = await res.json().catch(() => ({ ok: false }));
-        if (res.ok && body.ok) {
-          login(body.user, body.supabaseToken);
-          return;
-        }
-      } catch {}
-      setIsShaking(true);
-      setError('パスワードが違います');
-      setPin('');
-      setTimeout(() => setIsShaking(false), 400);
-      setIsLoading(false);
-    });
+  // 開発者ログインは全店舗を横断できる最も強い入口のため、4桁のPINパッドではなく
+  // 長いランダム文字列を入力する形にしている（2026-08-29 の点検 F-1）。
+  const handleDevSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!devPassword || isLoading) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/dev-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: devPassword }),
+      });
+      const body = await res.json().catch(() => ({ ok: false }));
+      if (res.ok && body.ok) {
+        login(body.user, body.supabaseToken);
+        return;
+      }
+      // 設定漏れ・試行超過は原因が分かる文言にする（PIN不一致と区別する）
+      if (res.status === 503) setError('開発者ログインは無効です（パスワード未設定）');
+      else if (res.status === 429) setError('試行回数の上限です。しばらく待ってから再試行してください');
+      else setError('パスワードが違います');
+    } catch {
+      setError('通信に失敗しました');
+    }
+    setIsShaking(true);
+    setDevPassword('');
+    setTimeout(() => setIsShaking(false), 400);
+    setIsLoading(false);
   };
 
   const handleKey = (key: string) => {
@@ -102,7 +110,7 @@ export default function LoginPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
         <div className={`bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
           <button
-            onClick={() => { setDevMode(false); setPin(''); setError(''); }}
+            onClick={() => { setDevMode(false); setPin(''); setDevPassword(''); setError(''); }}
             className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1 rounded-md"
           >
             ← 戻る
@@ -114,7 +122,26 @@ export default function LoginPage() {
             <h2 className="text-xl font-bold text-slate-800">開発者モード</h2>
             <p className="text-slate-500 text-sm mt-1">パスワードを入力してください</p>
           </div>
-          <PinPad pin={pin} error={error} disabled={isLoading} dotClassName="bg-slate-700" onKey={handleDevKey} />
+          <form onSubmit={handleDevSubmit} className="space-y-3">
+            <input
+              type="password"
+              autoFocus
+              autoComplete="off"
+              value={devPassword}
+              onChange={e => { setDevPassword(e.target.value); setError(''); }}
+              disabled={isLoading}
+              aria-label="開発者パスワード"
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-slate-800 font-mono text-sm tracking-tight focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-50"
+            />
+            {error && <p className="text-sm text-rose-600 text-center">{error}</p>}
+            <button
+              type="submit"
+              disabled={isLoading || !devPassword}
+              className="w-full py-2.5 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-40"
+            >
+              {isLoading ? '確認中…' : 'ログイン'}
+            </button>
+          </form>
         </div>
       </div>
     );
