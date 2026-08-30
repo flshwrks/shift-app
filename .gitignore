@@ -36,6 +36,9 @@ yarn-error.log*
 # これが無いと、新しい担当者は「何を設定すれば動くのか」を知る手段が無い。
 !.env*.example
 
+# backup (npm run backup の出力。氏名・勤務予定・時給が平文で入るため絶対にコミットしない)
+/backups
+
 # vercel
 .vercel
 

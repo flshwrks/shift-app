@@ -19,5 +19,6 @@ jobs:
       # 本番に載る依存だけを見る（開発ツールの検知でCIを止めない）。
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run check:guide
+      - run: npm test
       - run: npx tsc --noEmit
       - run: npx next build

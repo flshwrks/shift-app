@@ -31,12 +31,15 @@ npm run dev                        # http://localhost:3000
 | コマンド | 用途 |
 |---|---|
 | `npm run dev` | 開発サーバー |
+| `npm test` | 自動テスト（実働時間の計算・認可まわり・セッション） |
+| `npm run check:env` | 必要な環境変数が揃っているかの確認 |
+| `npm run backup` | 本番データを手元にJSONで書き出す（月1回・`docs/OPERATIONS.md` §9-3） |
 | `npm run build` | 本番ビルド |
 | `npm run gen:guide` | ヘルプ（`lib/help/content.ts`）から `docs/GUIDE.md` を再生成 |
 | `npm run check:guide` | 上のズレを検出（CIと同じ） |
 
 CI（`.github/workflows/ci.yml`）は push / PR ごとに
-`npm audit` → `check:guide` → `tsc --noEmit` → `next build` を実行する。
+`npm audit` → `check:guide` → `npm test` → `tsc --noEmit` → `next build` を実行する。
 
 ## 変更を出すときの約束
 
