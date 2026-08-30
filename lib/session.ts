@@ -1,8 +1,11 @@
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { SessionUser } from './types';
-import { canAccessAdmin, isHqRole } from './types';
+import { isHqRole } from './types';
+
+// このファイルは proxy.ts（全リクエストが通る）からも import されるため、
+// Cookieの署名・期限の検証だけに徹し、DBやsupabase-jsには依存しない。
+// 「その利用者がまだ存在するか」の照合は lib/sessionGuard.ts が受け持つ。
 
 const COOKIE_NAME = 'shift_session';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30日
@@ -64,33 +67,13 @@ export function verifySessionCookie(raw: string): SessionUser | null {
   }
 }
 
-// 現在のリクエストのセッションCookieを検証して返す（Route Handler内で使用）
+// 現在のリクエストのセッションCookieを検証して返す（Route Handler内で使用）。
+// ★これはCookieの署名と期限しか見ない★。退職者や権限を落とされた利用者のCookieも
+// 期限内なら通るため、APIルートでは lib/sessionGuard.ts の requireAdmin /
+// requireSession / getVerifiedSession を使うこと。
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
   const raw = store.get(COOKIE_NAME)?.value;
   if (!raw) return null;
   return verifySessionCookie(raw);
-}
-
-async function requireRoleSession(allow: (role: SessionUser['role']) => boolean): Promise<SessionUser | null> {
-  const session = await getSession();
-  if (!session) return null;
-  if (!allow(session.role)) return null;
-  return session;
-}
-
-// 管理画面アクセス権限（admin/hq_admin/developer）が必要なAPIルートの入口で使う。
-// 権限がなければ403レスポンスを返すので、呼び出し側は
-// `if (session instanceof NextResponse) return session;` だけでガードできる。
-export async function requireAdmin(): Promise<SessionUser | NextResponse> {
-  const session = await requireRoleSession(canAccessAdmin);
-  if (!session) return NextResponse.json({ error: '権限がありません' }, { status: 403 });
-  return session;
-}
-
-// 本部権限（hq_admin/developer）のみを許可するAPIルートの入口で使う。
-export async function requireHqAdmin(): Promise<SessionUser | NextResponse> {
-  const session = await requireRoleSession(isHqRole);
-  if (!session) return NextResponse.json({ error: '権限がありません' }, { status: 403 });
-  return session;
 }

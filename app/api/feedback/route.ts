@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession, requireAdmin } from '@/lib/session';
+import { requireSession, requireAdmin } from '@/lib/sessionGuard';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { isHqRole } from '@/lib/types';
 import type { FeedbackCategory, FeedbackDestination, FeedbackStatus } from '@/lib/types';
@@ -37,8 +37,8 @@ function parseFeedbackPayload(body: unknown) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'ログインが必要です' }, { status: 403 });
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
 
   const { destination, category, body, appVersion, userAgent } = parseFeedbackPayload(
     await request.json().catch(() => null),

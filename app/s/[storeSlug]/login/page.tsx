@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { homePathFor, storeLoginPath, HQ_LOGIN } from '@/lib/routes';
 import { isHqRole, type UserRole } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
+import SessionEndedNotice from '@/components/SessionEndedNotice';
 import PinPad, { applyPinKey } from '@/components/PinPad';
 
 // list_login_users RPC の戻り値。ログイン画面に必要な最小限のフィールドのみ。
@@ -233,6 +234,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+      <SessionEndedNotice />
       <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 w-fit">

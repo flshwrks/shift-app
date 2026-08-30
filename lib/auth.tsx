@@ -1,7 +1,8 @@
 'use client';
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import type { SessionUser } from './types';
+import { isHqRole, type SessionUser } from './types';
 import { setSupabaseAccessToken } from './supabase';
+import { HQ_LOGIN, storeLoginPath } from './routes';
 
 interface AuthContextType {
   user: SessionUser | null;
@@ -21,17 +22,32 @@ const SESSION_KEY = 'shift_session';
 // SupabaseJWTのTTL(1時間)より短い間隔で先回りして更新し、失効による瞬断を防ぐ
 const REFRESH_INTERVAL_MS = 45 * 60 * 1000;
 
-// /api/session/token からSupabase用JWTを取得し、成功したらSupabaseクライアントに反映する。
-// httpOnly Cookieが失効している場合は401が返るので、呼び出し側でログアウト状態に倒す。
-async function fetchAndApplyToken(): Promise<boolean> {
+// /api/session/token の結果。「セッションが無効」と「サーバーに繋がらない」を区別する。
+// 一緒くたに扱うと、通信が一瞬切れただけで利用者を強制ログアウトさせてしまう。
+type TokenResult =
+  | { status: 'ok'; user: SessionUser | null }
+  | { status: 'invalid' }    // 401 = 退職・削除済み。ログアウトさせる
+  | { status: 'unavailable' }; // 通信断・DB障害など。何もせず次の周期に任せる
+
+// Supabase用JWTを取得し、成功したらSupabaseクライアントに反映する。
+// サーバー側は発行のたびに利用者がまだDBに存在するかを確認しているため（lib/sessionGuard.ts）、
+// 退職者のセッションはここで 401 になって断ち切られる。
+async function fetchAndApplyToken(): Promise<TokenResult> {
+  let res: Response;
   try {
-    const res = await fetch('/api/session/token');
-    if (!res.ok) return false;
-    const { token } = (await res.json()) as { token: string };
-    setSupabaseAccessToken(token);
-    return true;
+    res = await fetch('/api/session/token');
   } catch {
-    return false;
+    return { status: 'unavailable' };
+  }
+  if (res.status === 401) return { status: 'invalid' };
+  if (!res.ok) return { status: 'unavailable' };
+  try {
+    const { token, user } = (await res.json()) as { token: string; user?: SessionUser };
+    setSupabaseAccessToken(token);
+    // サーバーが返す user はDBと突き合わせ済み。権限を落とされていればここで最新になる
+    return { status: 'ok', user: user ?? null };
+  } catch {
+    return { status: 'unavailable' };
   }
 }
 
@@ -51,21 +67,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // トークン取得を待ってから isLoading=false にする。先に false にすると、
       // 子コンポーネントがSupabaseへのJWT未添付リクエストを投げてRLSに弾かれるため。
-      const ok = await fetchAndApplyToken();
+      const result = await fetchAndApplyToken();
       if (cancelled) return;
 
-      if (ok) {
-        setUser(stored);
+      if (result.status === 'ok') {
+        // サーバー側で権限が変わっていたら、そちらを正とする
+        const current = result.user ?? stored;
+        if (current) localStorage.setItem(SESSION_KEY, JSON.stringify(current));
+        setUser(current);
       } else {
-        // Cookie失効（401等）＝ログアウト状態。ローカルの残骸も消す。
-        localStorage.removeItem(SESSION_KEY);
+        if (result.status === 'invalid') localStorage.removeItem(SESSION_KEY);
+        // 'unavailable' のときは localStorage を残す。サーバーが復旧すれば再読み込みで戻れる
         setUser(null);
       }
       setIsLoading(false);
     })();
 
-    const interval = setInterval(() => {
-      fetchAndApplyToken();
+    const interval = setInterval(async () => {
+      const result = await fetchAndApplyToken();
+      if (cancelled) return;
+      if (result.status === 'invalid') {
+        // 使っている最中に退職・削除された場合。黙ってデータが出なくなると原因が分からないので、
+        // 理由を添えてログイン画面へ送る。行き先はログアウト前の所属で決める
+        let last: SessionUser | null = null;
+        try {
+          const raw = localStorage.getItem(SESSION_KEY);
+          if (raw) last = JSON.parse(raw);
+        } catch {}
+        localStorage.removeItem(SESSION_KEY);
+        setSupabaseAccessToken(null);
+        const target = !last || isHqRole(last.role) || !last.storeSlug
+          ? HQ_LOGIN
+          : storeLoginPath(last.storeSlug);
+        window.location.replace(`${target}?reason=session_invalid`);
+        return;
+      }
+      if (result.status === 'ok' && result.user) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(result.user));
+        setUser(result.user);
+      }
     }, REFRESH_INTERVAL_MS);
 
     return () => {

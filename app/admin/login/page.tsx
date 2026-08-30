@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { isHqRole } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
+import SessionEndedNotice from '@/components/SessionEndedNotice';
 import PinPad, { applyPinKey } from '@/components/PinPad';
 
 interface HqAdminUser {
@@ -92,6 +93,7 @@ export default function AdminLoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+      <SessionEndedNotice />
       <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="mx-auto mb-4 w-fit">

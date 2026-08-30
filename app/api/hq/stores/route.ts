@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireHqAdmin } from '@/lib/session';
+import { requireHqAdmin } from '@/lib/sessionGuard';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import type { Store } from '@/lib/types';
 
