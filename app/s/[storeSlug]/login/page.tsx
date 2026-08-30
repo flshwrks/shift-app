@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { homePathFor, HQ_LOGIN } from '@/lib/routes';
-import type { UserRole } from '@/lib/types';
+import { homePathFor, storeLoginPath, HQ_LOGIN } from '@/lib/routes';
+import { isHqRole, type UserRole } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 import PinPad, { applyPinKey } from '@/components/PinPad';
 
@@ -19,7 +19,7 @@ interface LoginUser {
 }
 
 export default function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, logout } = useAuth();
   const { storeSlug, storeName } = useStore();
   const router = useRouter();
   const [users, setUsers] = useState<LoginUser[]>([]);
@@ -31,11 +31,23 @@ export default function LoginPage() {
   const [devMode, setDevMode] = useState(false);
   const [devPassword, setDevPassword] = useState('');
 
+  // 自店のログイン画面に、その店舗の人がログイン済みで来た場合だけ素通しする。
+  // （QRやブックマークからの再訪。毎回ログイン画面を挟むと煩わしい）
+  const isOwnStore = user != null && user.storeSlug === storeSlug;
+
   useEffect(() => {
-    if (!user) return;
-    // URL上のslugを渡す。他店のセッションで来た場合はproxy.tsが自店へ引き戻す。
+    if (!user || !isOwnStore) return;
     router.replace(homePathFor(user.role, storeSlug));
-  }, [user, router, storeSlug]);
+  }, [user, isOwnStore, router, storeSlug]);
+
+  const switchAccount = async () => {
+    // Cookieを消し切ってから遷移する（遷移が先だとリクエストが中断されうる）
+    await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+    logout();
+    // ★router.replace ではなく完全な遷移にする★（AppMenu と同じ理由。
+    // クライアント側のルーティングに割り込まれると、ログアウト直後の行き先が上書きされる）
+    window.location.replace(storeLoginPath(storeSlug));
+  };
 
   useEffect(() => {
     // RLS適用後は未認証(JWTなし)状態で users テーブルを直接読めないため、
@@ -104,6 +116,50 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // 本部管理者や他店の人がこの店舗のログイン画面を開いた場合。
+  // 黙ってホームへ飛ばすと「勝手に別のアカウントに切り替わった」ように見えるため、
+  // 今の状態を見せて選ばせる。ブラウザのCookieは全タブで共有されるので、
+  // 1つのブラウザで2つのアカウントに同時ログインすることはできない。
+  if (user && !isOwnStore) {
+    const roleLabel = isHqRole(user.role) ? '本部管理者' : user.role === 'admin' ? '店舗管理者' : 'スタッフ';
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-sm">
+          <div className="text-center mb-6">
+            <div className="w-14 h-14 bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-xl font-bold text-amber-600">!</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800">別のアカウントでログイン中です</h2>
+            <p className="text-slate-500 text-sm mt-2 leading-relaxed">
+              現在 <span className="font-semibold text-slate-700">{user.name}</span>（{roleLabel}）として
+              ログインしています。<br />
+              このブラウザでは同時に2つのアカウントを使えません。
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={() => router.replace(homePathFor(user.role, storeSlug))}
+              className="w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            >
+              {user.name} のまま続ける
+            </button>
+            <button
+              onClick={switchAccount}
+              className="w-full py-2.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50"
+            >
+              ログアウトして{storeName ? `「${storeName}」` : 'この店舗'}でログインする
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400 mt-5 leading-relaxed">
+            2つのアカウントを同時に開いて確認したい場合は、シークレットウィンドウか別のブラウザを使ってください。
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (devMode) {
     return (
