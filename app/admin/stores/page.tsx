@@ -10,6 +10,7 @@ export default function AdminStoresPage() {
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [createdSlug, setCreatedSlug] = useState('');
 
   // 追加フォーム
   const [addSlug, setAddSlug] = useState('');
@@ -50,6 +51,8 @@ export default function AdminStoresPage() {
     const body = await res.json().catch(() => ({}));
     setAddSaving(false);
     if (!res.ok) { setAddError(body.error ?? '追加に失敗しました'); return; }
+    // 店舗IDはサーバー側でランダムな接尾辞が付く。入力値と変わるので確定値を知らせる
+    setCreatedSlug(typeof body.slug === 'string' ? body.slug : '');
     setAddSlug(''); setAddName('');
     setShowAddForm(false);
     loadStores();
@@ -101,6 +104,9 @@ export default function AdminStoresPage() {
     setDeleteTarget(null);
   };
 
+  // 作成直後に確定した店舗IDを知らせる（入力値と変わるため）
+  const dismissCreated = () => setCreatedSlug('');
+
   // ログイン用URLをコピー（店頭掲示のQRコード運用を想定）
   const copyLoginUrl = (s: Store) => {
     const url = `${window.location.origin}/s/${s.slug}/login`;
@@ -112,6 +118,18 @@ export default function AdminStoresPage() {
 
   return (
     <div>
+      {createdSlug && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-semibold text-emerald-800">店舗を追加しました</p>
+          <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+            店舗IDは <code className="font-mono font-semibold">{createdSlug}</code> になりました。
+            URLを推測されないよう末尾にランダムな文字を付けています。
+            下の一覧の「URLをコピー」から、店舗に配るQRコードを作成してください。
+          </p>
+          <button onClick={dismissCreated} className="text-xs text-emerald-700 underline mt-2">閉じる</button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-semibold tracking-tight text-slate-900">店舗管理</h2>
         <button onClick={() => { setShowAddForm(true); setAddError(''); }}
@@ -134,7 +152,10 @@ export default function AdminStoresPage() {
               <label className="block text-xs font-medium text-slate-500 mb-1">店舗ID *</label>
               <input type="text" value={addSlug} onChange={e => setAddSlug(e.target.value)} placeholder="umeda"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              <p className="text-[11px] text-slate-400 mt-1">英小文字・数字・ハイフン（例: umeda）</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                英小文字・数字・ハイフン（例: umeda）。<br />
+                URLを推測されないよう、<span className="font-medium text-slate-500">末尾にランダムな6文字が自動で付きます</span>（例: umeda-k3f9q2）
+              </p>
             </div>
           </div>
           {addError && <p className="text-red-500 text-sm mt-3">{addError}</p>}
@@ -224,7 +245,10 @@ export default function AdminStoresPage() {
                 <label className="block text-xs font-medium text-slate-500 mb-1">店舗ID</label>
                 <input type="text" value={editSlug} onChange={e => setEditSlug(e.target.value)}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                <p className="text-[11px] text-slate-400 mt-1">英小文字・数字・ハイフン（例: umeda）</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                英小文字・数字・ハイフン（例: umeda）。<br />
+                URLを推測されないよう、<span className="font-medium text-slate-500">末尾にランダムな6文字が自動で付きます</span>（例: umeda-k3f9q2）
+              </p>
               </div>
             </div>
             {editError && <p className="text-red-500 text-sm mt-3">{editError}</p>}

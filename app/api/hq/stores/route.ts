@@ -3,11 +3,7 @@ import { requireHqAdmin } from '@/lib/sessionGuard';
 import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import type { Store } from '@/lib/types';
-
-// 店舗ID(slug)の形式: 半角英小文字・数字・ハイフンで3〜40文字、先頭末尾はハイフン不可。
-// URLの一部（/s/[storeSlug]/...）に使うため記号は最小限にしている。
-const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
-const SLUG_ERROR = '店舗IDは英小文字・数字・ハイフンで3文字以上40文字以下で入力してください';
+import { SLUG_PATTERN, SLUG_ERROR, MAX_BASE_LENGTH, withRandomSuffix } from '@/lib/storeSlug';
 
 function parseStorePayload(body: unknown) {
   const b = body as Record<string, unknown> | null;
@@ -38,10 +34,16 @@ export async function POST(request: Request) {
 
   const { slug, name } = parseStorePayload(await request.json().catch(() => null));
   if (!name) return NextResponse.json({ error: '店舗名を入力してください' }, { status: 400 });
-  if (!SLUG_PATTERN.test(slug)) return NextResponse.json({ error: SLUG_ERROR }, { status: 400 });
+  if (!SLUG_PATTERN.test(slug) || slug.length > MAX_BASE_LENGTH) {
+    return NextResponse.json({ error: SLUG_ERROR }, { status: 400 });
+  }
+
+  // 公開シフト表がログイン不要で見られるため、URLを推測されないよう
+  // サーバー側で必ずランダムな接尾辞を付ける（F-6。詳細は lib/storeSlug.ts）
+  const finalSlug = withRandomSuffix(slug);
 
   const admin = createAdminClient();
-  const { data, error } = await admin.from('stores').insert({ slug, name }).select('id').single();
+  const { data, error } = await admin.from('stores').insert({ slug: finalSlug, name }).select('id').single();
   if (error || !data) {
     const message = error?.message.includes('unique') ? 'この店舗IDは既に使用されています' : (error?.message ?? '店舗の作成に失敗しました');
     return NextResponse.json({ error: message }, { status: 400 });
@@ -49,10 +51,10 @@ export async function POST(request: Request) {
 
   void recordAudit(session, {
     storeId: data.id, action: 'store.create',
-    targetType: 'store', targetId: data.id, targetName: name, detail: { slug },
+    targetType: 'store', targetId: data.id, targetName: name, detail: { slug: finalSlug },
   });
 
-  return NextResponse.json({ ok: true, id: data.id });
+  return NextResponse.json({ ok: true, id: data.id, slug: finalSlug });
 }
 
 export async function PATCH(request: Request) {
