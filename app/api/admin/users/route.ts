@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/sessionGuard';
+import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { isHqRole, type SessionUser } from '@/lib/types';
 
@@ -69,6 +70,11 @@ export async function POST(request: Request) {
   const pinError = await setPin(admin, data.id, pin);
   if (pinError) return NextResponse.json({ error: pinError }, { status: 400 });
 
+  void recordAudit(session, {
+    storeId: effectiveStoreId, action: 'user.create',
+    targetType: 'user', targetId: data.id, targetName: name, detail: { role },
+  });
+
   return NextResponse.json({ ok: true, id: data.id });
 }
 
@@ -91,11 +97,12 @@ export async function PATCH(request: Request) {
   // 「UPDATEは0行だが他店スタッフのPINだけ書き換わる」状態を作れてしまう。
   // これは docs/SECURITY.md に記録されている admin_set_pin のインシデントと同型。
   // 権限判定は必ずPIN設定より前に、この形で行うこと。
+  // store_id は権限判定に、name/role は「何がどう変わったか」を記録するために取る
   const { data: existing, error: existingError } = await admin
     .from('users')
-    .select('store_id')
+    .select('store_id, name, role')
     .eq('id', id)
-    .maybeSingle<{ store_id: string | null }>();
+    .maybeSingle<{ store_id: string | null; name: string; role: string }>();
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 400 });
   if (!existing) return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
   if (!isHqRole(session.role) && existing.store_id !== session.storeId) {
@@ -108,6 +115,19 @@ export async function PATCH(request: Request) {
   ]);
   if (updateResult.error) return NextResponse.json({ error: updateResult.error.message }, { status: 400 });
   if (pinError) return NextResponse.json({ error: pinError }, { status: 400 });
+
+  // 変わったものだけを個別に記録する。「権限を変えた」と「名前を直した」は
+  // 後から見たときの重みが違うので、1行にまとめない
+  const audit = { storeId: existing.store_id, targetType: 'user' as const, targetId: id, targetName: name };
+  if (existing.role !== role) {
+    void recordAudit(session, { ...audit, action: 'user.role_change', detail: { from: existing.role, to: role } });
+  }
+  if (existing.name !== name) {
+    void recordAudit(session, { ...audit, action: 'user.rename', detail: { from: existing.name, to: name } });
+  }
+  if (pin) {
+    void recordAudit(session, { ...audit, action: 'user.pin_reset' });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -126,11 +146,18 @@ export async function DELETE(request: Request) {
   // 条件付きDELETE1回で済ませられる（reorderと同じ方式）。他店の行を指定しても
   // 該当0件になるだけで、存在の有無すら相手に漏れない。
   const query = admin.from('users').delete().eq('id', id);
+  // 削除後は氏名を引けないため、消える行から name/store_id を受け取っておく
   const { data: deleted, error } = await (
     isHqRole(session.role) ? query : query.eq('store_id', session.storeId)
-  ).select('id');
+  ).select('id, name, store_id');
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   if (!deleted?.length) return NextResponse.json({ error: '権限がありません' }, { status: 403 });
+
+  const gone = deleted[0] as { id: string; name: string; store_id: string | null };
+  void recordAudit(session, {
+    storeId: gone.store_id, action: 'user.delete',
+    targetType: 'user', targetId: gone.id, targetName: gone.name,
+  });
 
   return NextResponse.json({ ok: true });
 }

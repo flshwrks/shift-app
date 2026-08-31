@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireHqAdmin } from '@/lib/sessionGuard';
+import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import type { Store } from '@/lib/types';
 
@@ -45,6 +46,11 @@ export async function POST(request: Request) {
     const message = error?.message.includes('unique') ? 'この店舗IDは既に使用されています' : (error?.message ?? '店舗の作成に失敗しました');
     return NextResponse.json({ error: message }, { status: 400 });
   }
+
+  void recordAudit(session, {
+    storeId: data.id, action: 'store.create',
+    targetType: 'store', targetId: data.id, targetName: name, detail: { slug },
+  });
 
   return NextResponse.json({ ok: true, id: data.id });
 }
@@ -121,8 +127,18 @@ export async function DELETE(request: Request) {
     }
   }
 
+  // 消える前に店舗名を控えてから削除する（記録に「どの店舗を消したか」を残すため）
+  const { data: target } = await admin
+    .from('stores').select('name, slug').eq('id', id).maybeSingle<{ name: string; slug: string }>();
+
   const { error } = await admin.from('stores').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  void recordAudit(session, {
+    storeId: id, action: 'store.delete',
+    targetType: 'store', targetId: id, targetName: target?.name ?? null,
+    detail: target ? { slug: target.slug } : undefined,
+  });
 
   return NextResponse.json({ ok: true });
 }

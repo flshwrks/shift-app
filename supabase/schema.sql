@@ -700,3 +700,43 @@ grant select on public.feedback to authenticated;
 
 -- 未読バッジのリアルタイム更新用（shift_requestsと同じ扱い）
 alter publication supabase_realtime add table public.feedback;
+
+-- ============================================================================
+-- 操作の記録（監査ログ）  2026-08-31 追加
+-- 経緯と設計判断は docs/SECURITY.md「操作の記録（監査ログ）」を参照。
+-- ★外部キー制約を意図的に付けていない（他のデータが消えても記録を残すため）
+-- ★書込みポリシーを意図的に作っていない（追記専用にするため）
+-- ============================================================================
+
+create table if not exists public.audit_logs (
+  id uuid default gen_random_uuid() primary key,
+  store_id uuid,                    -- 参照制約なし。店舗が消えても記録は残す
+  actor_id uuid,                    -- 同上。実行者が削除されても記録は残す
+  actor_name text not null,         -- 実行時点の氏名スナップショット
+  actor_role text not null,
+  action text not null,
+  target_type text,
+  target_id uuid,
+  target_name text,
+  detail jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists audit_logs_store_created_idx
+  on public.audit_logs (store_id, created_at desc);
+
+alter table public.audit_logs enable row level security;
+
+create policy "audit_logs_select" on public.audit_logs
+  for select to anon, authenticated
+  using (
+    public.is_hq_admin()
+    or (public.jwt_app_role() = 'admin' and store_id = public.jwt_store_id())
+  );
+
+-- 書込みポリシーは作らない。RLS有効かつポリシー不在＝誰にも許可されない状態にして、
+-- トリガー（security definer）と service_role だけが記録を作れるようにする。
+
+-- シフトの確定・時刻変更・削除を記録するトリガー。
+-- 定義本体は supabase/migrations/2026-08-31_audit_log.sql を参照
+-- （log_shift_change() と shifts_audit トリガー）。
