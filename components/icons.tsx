@@ -206,6 +206,7 @@ const SECTION_ICONS: Record<SectionIconName, React.ComponentType<React.SVGProps<
   'trending-up': IconTrendingUp,
   building: IconBuilding,
   history: IconHistory,
+  alert: IconAlertTriangle,
 };
 
 export function SectionIcon({ icon, className = 'w-5 h-5 text-white' }: { icon: SectionIconName; className?: string }) {

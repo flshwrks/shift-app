@@ -741,3 +741,11 @@ create policy "audit_logs_select" on public.audit_logs
 -- 定義本体は supabase/migrations/2026-08-31_audit_log.sql を参照
 -- （log_shift_change() と shifts_audit トリガー）。
 -- detail への shift_type 追加は 2026-08-31b_audit_shift_type.sql。
+
+-- ============================================================================
+-- エラーの記録  2026-08-31 追加
+-- 経緯と、外部の監視サービスを使わない判断は docs/SECURITY.md「エラーの記録」を参照。
+-- 定義本体は supabase/migrations/2026-08-31c_error_log.sql。
+-- ★追加ポリシーを作らない（記録を作れるのは service_role のみ）
+-- ★参照・更新は本部権限のみ（エラー本文に他店の情報が混ざりうるため）
+-- ============================================================================

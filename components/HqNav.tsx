@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { HQ_HOME, HQ_FEEDBACK } from '@/lib/routes';
+import { HQ_HOME, HQ_FEEDBACK, HQ_ERRORS } from '@/lib/routes';
 
-// 本部管理エリアのナビ。店舗エリアのNavBarと違い、ここは項目が2つだけなので
+// 本部管理エリアのナビ。店舗エリアのNavBarと違い項目が少ないので、
 // ボトムナビは置かず、ヘッダー直下の横並びタブにとどめる。
 export default function HqNav() {
   const pathname = usePathname();
   const [openFeedbackCount, setOpenFeedbackCount] = useState(0);
+  const [openErrorCount, setOpenErrorCount] = useState(0);
 
   // 「開発者へ」宛ての未対応件数。本部管理者はRLS上すべての要望が見えるので
   // 店舗での絞り込みは不要（destinationだけで分ける）
@@ -29,9 +30,20 @@ export default function HqNav() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // エラーは自前で記録しており即時通知の手段が無いため、このバッジが気づく唯一の入口になる。
+  // テーブル未作成（マイグレーション適用前）ではエラーが返るので、その場合は0のままにする
+  useEffect(() => {
+    supabase
+      .from('error_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'new')
+      .then(({ count, error }) => setOpenErrorCount(error ? 0 : count ?? 0));
+  }, []);
+
   const items = [
     { href: HQ_HOME, label: '店舗一覧', badge: 0 },
     { href: HQ_FEEDBACK, label: '要望', badge: openFeedbackCount },
+    { href: HQ_ERRORS, label: 'エラー', badge: openErrorCount },
   ];
 
   return (
