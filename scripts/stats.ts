@@ -71,6 +71,22 @@ async function main() {
   console.log(`  店舗数        ${fmt(stores)}`);
   console.log(`  利用者数      ${fmt(users)}（スタッフ ${fmt(staff)} / 店舗管理者 ${fmt(admins)} / 本部管理者 ${fmt(hqAdmins)}）`);
 
+  // ---- 店舗別（テスト用の店舗が混ざるので、実店舗の数字はここで見る）----
+  const { data: storeRows } = await db.from('stores').select('id, name, slug').order('created_at');
+  if (storeRows?.length) {
+    console.log('\n【店舗別】');
+    for (const st of storeRows as { id: string; name: string; slug: string }[]) {
+      const [u, sh, last] = await Promise.all([
+        count('users', q => q.eq('store_id', st.id)),
+        count('shifts', q => q.eq('store_id', st.id)),
+        db.from('shifts').select('date').eq('store_id', st.id)
+          .order('date', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      const tail = last.data?.date ? `最終 ${last.data.date}` : 'シフト未入力';
+      console.log(`  ${st.name}（${st.slug}）  ${fmt(u)}人 / シフト ${fmt(sh)}件 / ${tail}`);
+    }
+  }
+
   // ---- 入力量 ----
   const [shifts, confirmed, requests, surveys, responses, feedback] = await Promise.all([
     count('shifts'),
