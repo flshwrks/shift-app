@@ -43,11 +43,15 @@ export default function AdminStaffPage() {
     if (!/^\d{4}$/.test(addPin)) return setAddError('PINは数字4桁で入力してください');
     if (addPin !== addPinConfirm) return setAddError('PINが一致しません');
     setAddSaving(true);
-    // 店舗管理者の場合、サーバー側がセッションのstoreIdを強制適用するのでbodyにstoreIdは不要
+    // ★storeId は必ず送る★
+    // 店舗管理者の場合、サーバー側はセッションのstoreIdを強制適用するのでこの値は無視される
+    // （bodyのstoreIdを信用しないのは意図した設計。docs/SECURITY.md「店舗境界の実体はコードにある」）。
+    // 一方、本部管理者は所属店舗を持たないため、bodyのstoreIdが無いと
+    // 「どの店舗に追加するのか」が決まらず 400 になる。今表示している店舗を渡す。
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: addName.trim(), role: addRole, pin: addPin }),
+      body: JSON.stringify({ name: addName.trim(), role: addRole, pin: addPin, storeId }),
     });
     const body = await res.json().catch(() => ({}));
     setAddSaving(false);
