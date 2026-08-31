@@ -13,20 +13,17 @@
 
 軽微な修正（誤字・スタイル調整・コメントのみの変更等）は対象外。バージョン番号を上げるかどうか迷ったら、ユーザーに確認する。
 
-## ★このDBは在庫管理アプリと共有している★
+## DBの同居はもう無い（2026-08-31 解消）
 
-2026-08-10 以降、`~/.claude/在庫管理アプリ/inventory-app` が**同じSupabaseプロジェクト**を使っている。
-向こうは `users` / `stores` / `verify_login` / `list_login_users` / `jwt_*()` / `is_hq_admin()` を
-**参照するだけ**だが、これらを変えると在庫アプリが静かに壊れる（多くは「全員ログインできない」）。
+2026-08-10 から 2026-08-31 まで、`~/.claude/在庫管理アプリ/inventory-app` が
+**同じSupabaseプロジェクト**に相乗りしていた（Supabase無料プランが1組織2プロジェクトまでのため）。
+**在庫アプリは廃止し、`inv_*` を全削除したので、いまこのDBはシフト管理アプリ専用。**
 
-次のものを変更したら、**必ず** `cd ~/.claude/在庫管理アプリ/inventory-app && npm run check:contract` を回すこと。
+- `users` / `stores` / `verify_login` / `list_login_users` / `jwt_*()` / `is_hq_admin()` を
+  変更しても、もう他アプリを壊さない。`npm run check:contract` も不要（在庫アプリ側の仕組み）
+- `SUPABASE_JWT_SECRET` の共有相手はいない。**単独でローテーションできる**
+- ただし `grant ... on all tables in schema public` と `alter default privileges` は
+  引き続き使わない（スキーマ全体に波及するため。理由は `supabase/schema.sql` 末尾）
 
-- `users` の `id/name/role/store_id`、`stores` の `id/slug/name`
-- `verify_login` / `list_login_users` の引数・戻り値
-- `jwt_app_role()` / `jwt_store_id()` / `jwt_user_id()` / `is_hq_admin()`（**PUBLIC実行権限のrevokeは両アプリを殺す**）
-- `SUPABASE_JWT_SECRET`（両アプリで同じ値。変えるなら両方の環境変数を同時に更新する）
-
-また、`grant ... on all tables in schema public` と `alter default privileges` は
-両アプリに波及するので使わない。実DBには本リポジトリに無い `inv_*` オブジェクトが存在する。
-
-詳細と復旧手順: `inventory-app/docs/RUNBOOK.md`（特に §5-1「シフト管理アプリを触る人へ」）
+経緯: `improvement_list/2026-08-31_inventory_teardown.md`。
+再構築が必要になった場合、在庫アプリの実装は `inventory-app` リポジトリに残っている。

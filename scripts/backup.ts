@@ -19,7 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// このアプリが所有するテーブル。inv_* は在庫管理アプリのもので、あちらの責任範囲なので触らない。
+// このアプリが所有するテーブル。
 const TABLES = [
   'stores',
   'users',

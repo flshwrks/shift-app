@@ -7,7 +7,7 @@
 -- 詳細な経緯・残存リスクは docs/SECURITY.md を参照。
 --
 -- ★このDBは在庫管理アプリ(inventory-app)と共有しています★（2026-08-10〜）
--- 実DBには本ファイルに載っていない `inv_*` のテーブル・ビュー・関数が存在します。
+-- （2026-08-31まで在庫管理アプリの `inv_*` が同居していましたが、廃止して削除済みです。）
 -- それらは inventory-app リポジトリ（~/.claude/在庫管理アプリ/inventory-app）の
 -- supabase/schema.sql が所有しており、本ファイルには含めません。
 -- このファイルだけでDBを再構築すると在庫データの入れ物が欠落するので、
@@ -86,10 +86,9 @@ create unique index if not exists users_name_null_store_uidx on public.users(nam
 -- 暗黙付与も含めてrevokeする」という教訓は機微データにアクセスする関数向けの指針であり、
 -- 自分自身のJWTを読むだけのこれらの関数には当てはまらない）。
 -- ============================================================
--- ★在庫管理アプリ(inventory-app)が依存しています★
--- この直後のRLSヘルパー4関数は在庫アプリのポリシーでも使われます。★PUBLIC実行権限をrevokeすると両アプリの全ポリシー評価が落ちます★
--- 変更したら inventory-app 側で npm run check:contract を回すこと。
--- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
+-- ★この直後のRLSヘルパー4関数は、全テーブルのポリシーから呼ばれます。
+--   PUBLIC実行権限をrevokeすると全ポリシーの評価が落ち、誰も何も読めなくなります★
+-- （2026-08-31まで在庫管理アプリのポリシーからも呼ばれていた。在庫アプリは廃止済み）
 create or replace function public.jwt_app_role()
 returns text
 language sql
@@ -265,10 +264,7 @@ revoke insert, update, delete on public.users from anon, authenticated;
 -- PIN検証RPC（bcrypt比較 + 失敗ロックアウト。詳細は migrations/2026-07-25_security_hardening.sql）
 -- 戻り値の store_id は、呼び出し側が「URLのstoreSlugと実際の所属店舗が一致するか」
 -- 「hq_adminが一般ログイン入口を使っていないか」を判定するために使う
--- ★在庫管理アプリ(inventory-app)が依存しています★
--- 在庫アプリのログインもこの関数を呼びます。★戻り値の store_id を落とすと全員ログイン不可になります★
--- 変更したら inventory-app 側で npm run check:contract を回すこと。
--- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
+-- ★戻り値の store_id を落とすと、上記の判定ができなくなりログインが通らなくなります★
 create or replace function public.verify_login(p_user_id uuid, p_pin text)
 returns table(id uuid, name text, role text, store_id uuid)
 language plpgsql
@@ -303,10 +299,7 @@ grant execute on function public.verify_login(uuid, text) to anon, authenticated
 -- 未認証ログイン画面用のRPC（SECURITY DEFINER。usersのRLSより広い範囲を
 -- 読む必要があるため、意図的に公開する）
 -- /s/[storeSlug]/login が、指定店舗の admin/staff 一覧をログイン前に表示するために使う
--- ★在庫管理アプリ(inventory-app)が依存しています★
--- 在庫アプリのログイン画面もこの関数を呼びます。★消す・改名すると全員ログイン不可になります★
--- 変更したら inventory-app 側で npm run check:contract を回すこと。
--- 影響と手順: inventory-app/docs/RUNBOOK.md §5-1
+-- ★消す・改名するとログイン画面が利用者を出せなくなります★
 create or replace function public.list_login_users(p_store_slug text)
 returns table(id uuid, name text, role text, display_order int)
 language sql
@@ -689,7 +682,7 @@ create policy "feedback_select" on public.feedback
 -- Supabaseプロジェクトのdefault privilegesにより、新規テーブルは既定でanon/authenticatedに
 -- 広い権限が付く（stores/users等でも同様の理由で明示revokeしている）。
 -- ★ここでは `grant ... on all tables in schema public` や `alter default privileges` は
--- 絶対に使わない（在庫管理アプリと共有のDBのため、両アプリの全テーブルに波及する）★
+-- 絶対に使わない（スキーマ全体に波及し、意図しないテーブルまで公開される）★
 -- 個別テーブル指定のgrant/revokeのみで完結させる。
 -- PUBLICへの暗黙付与も明示的にrevokeする（ロール個別のrevokeでは取り消せないため）。
 -- 経緯は docs/SECURITY.md 参照

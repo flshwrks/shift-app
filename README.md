@@ -18,7 +18,7 @@
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | 配色・コンポーネントの約束 | 開発 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 変更履歴（アプリ内の更新履歴ページにそのまま出る） | 全員 |
 | `improvement_list/` | 1計画1ファイルの改修記録。「なぜそうしたか」が残っている | 開発 |
-| [`CLAUDE.md`](CLAUDE.md) | 開発時の約束事（**DBを在庫管理アプリと共有している点に注意**） | 開発 |
+| [`CLAUDE.md`](CLAUDE.md) | 開発時の約束事 | 開発 |
 
 ## 開発をはじめる
 
@@ -45,7 +45,7 @@ CI（`.github/workflows/ci.yml`）は push / PR ごとに
 
 - `master` に直接コミットしない。ブランチ → プレビューで確認 → PR
 - 利用者に意味のある変更は `package.json` の版を上げ、`CHANGELOG.md` に日本語で書く
-- DBを変えるときは `supabase/migrations/` に追加し、**在庫管理アプリへの影響を確認する**
+- DBを変えるときは `supabase/migrations/` に追加する（手順は `docs/OPERATIONS.md` §7）
   （`docs/OPERATIONS.md` §7）
 
 詳細は [`docs/OPERATIONS.md`](docs/OPERATIONS.md) を参照。
