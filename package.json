@@ -8,6 +8,7 @@
     "start": "next start",
     "test": "tsx --test tests/*.test.ts",
     "backup": "tsx --env-file=.env.local scripts/backup.ts",
+    "stats": "tsx --env-file=.env.local scripts/stats.ts",
     "check:env": "tsx scripts/check-env.ts",
     "gen:guide": "tsx scripts/generate-guide.ts",
     "check:guide": "tsx scripts/generate-guide.ts --check"
