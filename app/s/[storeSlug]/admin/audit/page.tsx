@@ -53,14 +53,17 @@ function describeDetail(action: string, detail: Record<string, unknown> | null):
   if (!detail) return '';
   const s = (k: string) => (detail[k] == null ? '' : String(detail[k]));
   const date = s('date');
+  // 休みは時刻を持たない（00:00〜00:00 になる）ので、時刻ではなく種別を出す。
+  // shift_type は 2026-08-31b の追補で入れたため、それ以前の記録には無い
+  const isOff = s('shift_type') === 'off';
   switch (action) {
     case 'shift.confirm':
     case 'shift.unconfirm':
-      return date ? `${date} のシフト` : '';
+      return date ? `${date} の${isOff ? '休み' : 'シフト'}` : '';
     case 'shift.time_change':
       return `${date ? date + ' ' : ''}${s('from')} → ${s('to')}`;
     case 'shift.delete':
-      return `${date ? date + ' ' : ''}${s('time')}`;
+      return isOff ? `${date} の休み` : `${date ? date + ' ' : ''}${s('time')}`;
     case 'user.role_change':
       return `${ROLE_LABEL[s('from')] ?? s('from')} → ${ROLE_LABEL[s('to')] ?? s('to')}`;
     case 'user.rename':

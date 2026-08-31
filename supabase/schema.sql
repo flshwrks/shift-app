@@ -740,3 +740,4 @@ create policy "audit_logs_select" on public.audit_logs
 -- シフトの確定・時刻変更・削除を記録するトリガー。
 -- 定義本体は supabase/migrations/2026-08-31_audit_log.sql を参照
 -- （log_shift_change() と shifts_audit トリガー）。
+-- detail への shift_type 追加は 2026-08-31b_audit_shift_type.sql。
