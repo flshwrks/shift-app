@@ -1,21 +1,24 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_PATTERNS, PATTERN_KEYS, parsePatterns, serializePatterns,
-  enabledPatterns, findPattern, patternTitle, patternTimeRange,
+  DEFAULT_PATTERNS, PATTERN_KEYS, MAX_PATTERNS,
+  NEW_PATTERN_START, NEW_PATTERN_END,
+  parsePatterns, serializePatterns,
+  addPattern, removePattern, movePattern, nextAvailableKey,
+  findPattern, patternTitle, patternTimeRange,
   validatePatterns, isValidTime, type ShiftPattern,
 } from '../lib/shiftPatterns';
 import { SHIFT_PRESETS } from '../lib/types';
 
 const clone = (): ShiftPattern[] => DEFAULT_PATTERNS.map(p => ({ ...p }));
+const keys = (ps: ShiftPattern[]) => ps.map(p => p.key);
 
 describe('既定値', () => {
-  test('A〜Gの7枠がそろい、従来の時間帯と一致する', () => {
-    assert.equal(DEFAULT_PATTERNS.length, 7);
+  test('A〜Gの7件がそろい、従来の時間帯と一致する', () => {
+    assert.equal(DEFAULT_PATTERNS.length, MAX_PATTERNS);
     for (const p of DEFAULT_PATTERNS) {
       assert.equal(p.start, SHIFT_PRESETS[p.key].start);
       assert.equal(p.end, SHIFT_PRESETS[p.key].end);
-      assert.equal(p.enabled, true);
     }
   });
 });
@@ -33,44 +36,59 @@ describe('parsePatterns：壊れた値でも止まらない', () => {
     assert.deepEqual(parsePatterns('{"key":"A"}'), clone(), '配列でなければ既定値');
   });
 
-  test('枠が欠けていれば、その枠だけ既定値で埋まる', () => {
-    const got = parsePatterns(JSON.stringify([{ key: 'A', label: '早番', start: '07:00', end: '12:00', enabled: true }]));
-    assert.equal(got.length, 7);
-    assert.equal(got[0].start, '07:00');
-    assert.equal(got[0].label, '早番');
-    assert.equal(got[1].start, SHIFT_PRESETS.B.start, 'Bは既定値のまま');
+  test('保存された順序がそのまま復元される', () => {
+    const raw = JSON.stringify([
+      { key: 'C', label: '通し', start: '08:00', end: '17:00' },
+      { key: 'A', label: '早番', start: '08:00', end: '13:00' },
+    ]);
+    assert.deepEqual(keys(parsePatterns(raw)), ['C', 'A']);
   });
 
-  test('不正な時刻はその枠だけ既定値に戻る', () => {
-    const got = parsePatterns(JSON.stringify([{ key: 'A', start: '25:00', end: 'あ', enabled: true }]));
+  test('保存されていない記号は復元されない（削除が効く）', () => {
+    const raw = JSON.stringify([{ key: 'A', label: '', start: '08:00', end: '13:00' }]);
+    assert.deepEqual(keys(parsePatterns(raw)), ['A']);
+  });
+
+  test('不正な時刻はその件だけ既定値に戻る', () => {
+    const raw = JSON.stringify([{ key: 'A', start: '25:00', end: 'あ' }]);
+    const got = parsePatterns(raw);
     assert.equal(got[0].start, SHIFT_PRESETS.A.start);
     assert.equal(got[0].end, SHIFT_PRESETS.A.end);
   });
 
-  test('enabled は明示的な false のときだけ無効（未指定は有効）', () => {
-    const got = parsePatterns(JSON.stringify([
-      { key: 'A', enabled: false }, { key: 'B' }, { key: 'C', enabled: 'no' },
-    ]));
-    assert.equal(findPattern(got, 'A')!.enabled, false);
-    assert.equal(findPattern(got, 'B')!.enabled, true);
-    assert.equal(findPattern(got, 'C')!.enabled, true);
+  test('知らない記号と重複は捨てる', () => {
+    const raw = JSON.stringify([
+      { key: 'Z', start: '01:00', end: '02:00' },
+      { key: 'A', start: '08:00', end: '13:00' },
+      { key: 'A', start: '09:00', end: '14:00' },
+    ]);
+    assert.deepEqual(keys(parsePatterns(raw)), ['A']);
   });
 
-  test('知らないキーは無視される', () => {
-    const got = parsePatterns(JSON.stringify([{ key: 'Z', start: '01:00', end: '02:00' }]));
-    assert.deepEqual(got.map(p => p.key), [...PATTERN_KEYS]);
+  test('1件も残らない指定なら既定値に戻す（画面が空にならないように）', () => {
+    assert.deepEqual(parsePatterns('[]'), clone());
+    assert.deepEqual(parsePatterns(JSON.stringify([{ key: 'Z' }])), clone());
   });
 
   test('表示名は12文字で切られる', () => {
     const got = parsePatterns(JSON.stringify([{ key: 'A', label: 'あ'.repeat(30) }]));
     assert.equal(got[0].label.length, 12);
   });
+
+  test('旧形式（enabled付き）も読める。無効だったものは取り除かれる', () => {
+    const raw = JSON.stringify([
+      { key: 'A', label: '', start: '08:00', end: '13:00', enabled: true },
+      { key: 'B', label: '', start: '09:00', end: '14:00', enabled: false },
+      { key: 'C', label: '', start: '08:00', end: '17:00' },
+    ]);
+    assert.deepEqual(keys(parsePatterns(raw)), ['A', 'C']);
+  });
 });
 
 describe('保存と読み戻し', () => {
   test('往復しても内容が変わらない', () => {
-    const src = clone();
-    src[0] = { ...src[0], label: '早番', start: '07:30', end: '12:30', enabled: false };
+    const src = clone().slice(0, 3);
+    src[0] = { ...src[0], label: '早番', start: '07:30', end: '12:30' };
     assert.deepEqual(parsePatterns(serializePatterns(src)), src);
   });
 
@@ -81,33 +99,87 @@ describe('保存と読み戻し', () => {
   });
 });
 
-describe('選択肢の絞り込み', () => {
-  test('無効な枠は選択肢に出ない', () => {
-    const src = clone();
-    src[3].enabled = false; src[4].enabled = false;
-    src[5].enabled = false; src[6].enabled = false;
-    assert.deepEqual(enabledPatterns(src).map(p => p.key), ['A', 'B', 'C']);
+describe('増やす', () => {
+  test('空いている記号のうち、いちばん若いものが割り当たる', () => {
+    const src = [clone()[0], clone()[2]]; // A と C
+    assert.equal(nextAvailableKey(src), 'B');
+    assert.deepEqual(keys(addPattern(src)), ['A', 'C', 'B'], '末尾に足される');
   });
 
-  test('無効な枠でも findPattern では引ける（過去のシフトの表示に要る）', () => {
-    const src = clone();
-    src[6].enabled = false;
-    assert.equal(findPattern(src, 'G')!.key, 'G');
+  test('追加した種別は既定の時間帯を持つ', () => {
+    const added = addPattern([clone()[0]]);
+    assert.equal(added[1].start, NEW_PATTERN_START);
+    assert.equal(added[1].end, NEW_PATTERN_END);
+    assert.equal(added[1].label, '');
   });
 
-  test('存在しないキーは null', () => {
-    assert.equal(findPattern(clone(), 'custom'), null);
+  test('7件を超えては追加できない', () => {
+    const full = clone();
+    assert.equal(nextAvailableKey(full), null);
+    assert.deepEqual(addPattern(full), full, '何も起きない');
   });
 });
 
-describe('表示', () => {
+describe('減らす', () => {
+  test('指定した記号だけが消える', () => {
+    assert.deepEqual(keys(removePattern(clone(), 'C')), ['A', 'B', 'D', 'E', 'F', 'G']);
+  });
+
+  test('最後の1件は消せない', () => {
+    const one = [clone()[0]];
+    assert.deepEqual(removePattern(one, 'A'), one);
+  });
+
+  test('消した記号は再び追加できる（記号が再利用される）', () => {
+    const removed = removePattern(clone(), 'B');
+    assert.equal(nextAvailableKey(removed), 'B');
+  });
+
+  test('存在しない記号を指定しても壊れない', () => {
+    assert.deepEqual(keys(removePattern(clone(), 'Z')), [...PATTERN_KEYS]);
+  });
+});
+
+describe('入れ替える', () => {
+  test('ひとつ上へ動く', () => {
+    assert.deepEqual(keys(movePattern(clone(), 'C', -1)), ['A', 'C', 'B', 'D', 'E', 'F', 'G']);
+  });
+
+  test('ひとつ下へ動く', () => {
+    assert.deepEqual(keys(movePattern(clone(), 'A', 1)), ['B', 'A', 'C', 'D', 'E', 'F', 'G']);
+  });
+
+  test('端を越える指定は何もしない', () => {
+    assert.deepEqual(keys(movePattern(clone(), 'A', -1)), [...PATTERN_KEYS]);
+    assert.deepEqual(keys(movePattern(clone(), 'G', 1)), [...PATTERN_KEYS]);
+  });
+
+  test('並べ替えても記号と時間帯の対応は変わらない（過去のシフトが壊れない）', () => {
+    const moved = movePattern(clone(), 'C', -1);
+    assert.equal(findPattern(moved, 'C')!.start, SHIFT_PRESETS.C.start);
+    assert.equal(findPattern(moved, 'B')!.start, SHIFT_PRESETS.B.start);
+  });
+
+  test('元の配列を書き換えない', () => {
+    const src = clone();
+    movePattern(src, 'C', -1);
+    assert.deepEqual(keys(src), [...PATTERN_KEYS]);
+  });
+});
+
+describe('引く・表示する', () => {
+  test('削除された記号は null（呼び出し側はシフト行の時刻を出す）', () => {
+    assert.equal(findPattern(removePattern(clone(), 'G'), 'G'), null);
+    assert.equal(findPattern(clone(), 'custom'), null);
+  });
+
   test('表示名があれば「A 早番」、なければ「A」', () => {
-    assert.equal(patternTitle({ key: 'A', label: '早番', start: '08:00', end: '13:00', enabled: true }), 'A 早番');
-    assert.equal(patternTitle({ key: 'A', label: '   ', start: '08:00', end: '13:00', enabled: true }), 'A');
+    assert.equal(patternTitle({ key: 'A', label: '早番', start: '08:00', end: '13:00' }), 'A 早番');
+    assert.equal(patternTitle({ key: 'A', label: '   ', start: '08:00', end: '13:00' }), 'A');
   });
 
   test('時間帯は先頭の0を落とす', () => {
-    assert.equal(patternTimeRange({ key: 'A', label: '', start: '08:00', end: '13:00', enabled: true }), '8:00〜13:00');
+    assert.equal(patternTimeRange({ key: 'A', label: '', start: '08:00', end: '13:00' }), '8:00〜13:00');
   });
 });
 
@@ -116,9 +188,13 @@ describe('保存前の検証', () => {
     assert.deepEqual(validatePatterns(clone()), []);
   });
 
+  test('空は弾く', () => {
+    assert.match(validatePatterns([])[0], /1つ以上/);
+  });
+
   test('開始と終了が同じなら弾く', () => {
     const src = clone();
-    src[0].end = src[0].start;
+    src[0] = { ...src[0], end: src[0].start };
     assert.match(validatePatterns(src)[0], /開始と終了が同じ/);
   });
 
@@ -128,9 +204,9 @@ describe('保存前の検証', () => {
     assert.match(validatePatterns(src)[0], /終了が開始より前/);
   });
 
-  test('全部を無効にはできない', () => {
-    const src = clone().map(p => ({ ...p, enabled: false }));
-    assert.ok(validatePatterns(src).some(e => /少なくとも1つ/.test(e)));
+  test('表示名があればエラー文に出す', () => {
+    const src = [{ key: 'A' as const, label: '早番', start: '10:00', end: '09:00' }];
+    assert.match(validatePatterns(src)[0], /A（早番）/);
   });
 
   test('時刻の形式が壊れていれば弾く', () => {

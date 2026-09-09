@@ -9,7 +9,7 @@ import {
   netWorkMinutes, formatTotalHours,
 } from '@/lib/shifts';
 import { SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
-import { enabledPatterns, findPattern, patternTitle } from '@/lib/shiftPatterns';
+import { findPattern, patternTitle } from '@/lib/shiftPatterns';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { IconClipboard, IconCheck, IconChevronLeft, IconChevronRight } from '@/components/icons';
 
@@ -484,7 +484,7 @@ export default function ShiftsPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4">
         <p className="text-[11px] font-medium text-slate-500 mb-2">シフト種別</p>
         <div className="grid grid-cols-3 gap-1.5">
-          {enabledPatterns(patterns).map(p => (
+          {patterns.map(p => (
             <div key={p.key} className="flex items-center gap-1.5">
               <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[p.key] }}>{p.key}</span>
               <span className="text-[11px] text-slate-500 tabular-nums truncate">
@@ -703,7 +703,7 @@ export default function ShiftsPage() {
 
             {/* シフト種別ボタン */}
             <div className="grid grid-cols-2 gap-2 mb-3">
-              {enabledPatterns(patterns).map(p => {
+              {patterns.map(p => {
                 const selected = editShift.shiftType === p.key;
                 return (
                   <button

@@ -8,7 +8,7 @@ import ShiftDetailModal from '@/components/ShiftDetailModal';
 import ShiftRequestModal from '@/components/ShiftRequestModal';
 import type { Shift, User, ShiftType } from '@/lib/types';
 import { SHIFT_COLORS } from '@/lib/types';
-import { enabledPatterns, findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
+import { findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useAuth } from '@/lib/auth';
 import { useStore, useShiftPatterns } from '@/lib/store';
@@ -45,7 +45,7 @@ function ShiftModal({
   const [date, setDate] = useState(state.date);
   const patterns = useShiftPatterns();
   // 入力の初期値は「使う」枠の先頭。既存シフトの編集時はその行の時刻をそのまま出す
-  const first = enabledPatterns(patterns)[0] ?? patterns[0];
+  const first = patterns[0] ?? patterns[0];
   const [shiftType, setShiftType] = useState<ShiftType>(existing?.shift_type ?? first.key);
   const [startTime, setStartTime] = useState(existing?.start_time ?? first.start);
   const [endTime, setEndTime] = useState(existing?.end_time ?? first.end);
@@ -125,7 +125,7 @@ function ShiftModal({
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">シフト種別</label>
             <div className="grid grid-cols-4 gap-1 mb-2">
-              {enabledPatterns(patterns).map(p => (
+              {patterns.map(p => (
                 <button
                   key={p.key}
                   onClick={() => selectPreset(p.key)}

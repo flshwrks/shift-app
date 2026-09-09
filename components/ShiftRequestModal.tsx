@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useStore, useShiftPatterns } from '@/lib/store';
 import type { User, ShiftType, RequestType } from '@/lib/types';
-import { enabledPatterns, findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
+import { findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
 
 interface Props {
   users: User[];
@@ -20,7 +20,7 @@ export default function ShiftRequestModal({ users, defaultDate, defaultStartTime
   useBodyScrollLock();
   const { storeId } = useStore();
   const patterns = useShiftPatterns();
-  const firstPattern = enabledPatterns(patterns)[0] ?? patterns[0];
+  const firstPattern = patterns[0] ?? patterns[0];
 
   const hasCustomTime = !!defaultStartTime && !!defaultEndTime;
   const [requestType, setRequestType] = useState<RequestType>('targeted');
@@ -149,7 +149,7 @@ export default function ShiftRequestModal({ users, defaultDate, defaultStartTime
           <div>
             <label className="block text-[11px] font-medium text-slate-500 mb-1">希望シフト</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {enabledPatterns(patterns).map(p => (
+              {patterns.map(p => (
                 <button
                   key={p.key}
                   onClick={() => selectPreset(p.key)}

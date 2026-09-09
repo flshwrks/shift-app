@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useStore, useShiftPatterns } from '@/lib/store';
-import ShiftPatternEditor from '@/components/ShiftPatternEditor';
 import { formatYM } from '@/lib/shifts';
 import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight, IconHistory } from '@/components/icons';
+import { patternTimeRange } from '@/lib/shiftPatterns';
+import { SHIFT_COLORS } from '@/lib/types';
 
 // 提出期間は当面の1〜2ヶ月しか触らないのに6ヶ月分を常に並べていたため、
 // 設定画面が縦に長くなりすぎていた。手前の数ヶ月だけ出し、残りは畳む
@@ -173,6 +174,43 @@ export default function AdminSettingsPage() {
         )}
       </div>
 
+      {/* シフト種別は年に数回しか触らない設定なので、ここでは中身の確認だけできるようにし、
+          編集は専用ページへ送る。常に編集可能にしておくと、他の設定を見に来ただけで
+          誤って触れてしまう */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="font-semibold text-slate-700">シフト種別</h3>
+            <p className="text-xs text-slate-500 mt-0.5">この店舗で使う時間帯（{patterns.length}件）</p>
+          </div>
+          <button
+            onClick={() => router.push(`/s/${storeSlug}/admin/shift-types`)}
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm hover:bg-slate-50 flex-shrink-0"
+          >
+            編集する
+          </button>
+        </div>
+        <ul className="divide-y divide-slate-50">
+          {patterns.map(p => (
+            <li key={p.key} className="flex items-center gap-2.5 py-1.5">
+              <span
+                className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
+                style={{ backgroundColor: SHIFT_COLORS[p.key] }}
+              >
+                {p.key}
+              </span>
+              {p.label.trim() && <span className="text-sm text-slate-700 truncate">{p.label.trim()}</span>}
+              <span className="text-sm text-slate-500 tabular-nums ml-auto">{patternTimeRange(p)}</span>
+            </li>
+          ))}
+          <li className="flex items-center gap-2.5 py-1.5">
+            <span className="w-6 h-6 rounded-md flex items-center justify-center bg-slate-400 text-white text-[11px] font-bold flex-shrink-0">自</span>
+            <span className="text-sm text-slate-500">カスタム</span>
+            <span className="text-sm text-slate-400 ml-auto">30分刻み</span>
+          </li>
+        </ul>
+      </div>
+
       {/* 管理メニュー: 同じ見た目の白いボタンが並ぶと区別がつかず、押せることも伝わりにくい。
           色付きのアイコンタイルで種類を見分けられるようにする（配色はヘルプの
           セクション色と同じ言語を使い、新しい配色を持ち込まない） */}
@@ -207,8 +245,6 @@ export default function AdminSettingsPage() {
           ))}
         </div>
       </div>
-
-      <ShiftPatternEditor storeId={storeId} initial={patterns} />
 
     </div>
   );

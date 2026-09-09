@@ -5,12 +5,12 @@ import { SectionIcon } from '@/components/icons';
 import { HELP_CONTENT, type SectionColor } from '@/lib/help/content';
 import { SHIFT_COLORS } from '@/lib/types';
 import { useShiftPatterns } from '@/lib/store';
-import { enabledPatterns, patternTimeRange } from '@/lib/shiftPatterns';
+import { patternTimeRange } from '@/lib/shiftPatterns';
 
 // 凡例は店舗ごとのパターンから作る。本部配下など店舗が定まらない画面では既定値になる
 function useShiftTypeLegend() {
   const patterns = useShiftPatterns();
-  return enabledPatterns(patterns).map(p => ({
+  return patterns.map(p => ({
     type: p.key,
     color: SHIFT_COLORS[p.key],
     label: p.label.trim(),
