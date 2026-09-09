@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { useStore } from '@/lib/store';
+import { useStore, useShiftPatterns } from '@/lib/store';
+import ShiftPatternEditor from '@/components/ShiftPatternEditor';
 import { formatYM } from '@/lib/shifts';
 import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight, IconHistory } from '@/components/icons';
 
@@ -21,6 +22,7 @@ function getUpcomingMonths(count = 6): { year: number; month: number; label: str
 export default function AdminSettingsPage() {
   const router = useRouter();
   const { storeId, storeSlug, storeName } = useStore();
+  const patterns = useShiftPatterns();
   const months = getUpcomingMonths(6);
   const [periods, setPeriods] = useState<Record<string, string>>({});
   const [committedPeriods, setCommittedPeriods] = useState<Record<string, string>>({});
@@ -206,31 +208,8 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* シフト種別一覧 */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="font-semibold text-slate-700 mb-3">シフト種別</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-400 border-b border-slate-100">
-              <th className="pb-2">種別</th><th className="pb-2">開始</th><th className="pb-2">終了</th><th className="pb-2">時間</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {(['A','B','C','D','E','F','G'] as const).map(type => {
-              const p = { A:['8:00','13:00',5], B:['9:00','14:00',5], C:['8:00','17:00',9], D:['9:00','18:00',9], E:['13:00','22:00',9], F:['17:00','22:00',5], G:['9:00','22:00',13] }[type] as [string,string,number];
-              return (
-                <tr key={type}>
-                  <td className="py-1.5 font-bold text-blue-600">{type}</td>
-                  <td className="py-1.5 text-slate-600">{p[0]}</td>
-                  <td className="py-1.5 text-slate-600">{p[1]}</td>
-                  <td className="py-1.5 text-slate-400">{p[2]}h</td>
-                </tr>
-              );
-            })}
-            <tr><td className="py-1.5 font-medium text-slate-500">カスタム</td><td className="py-1.5 text-slate-400" colSpan={3}>8:00〜22:00 / 30分刻み</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <ShiftPatternEditor storeId={storeId} initial={patterns} />
+
     </div>
   );
 }

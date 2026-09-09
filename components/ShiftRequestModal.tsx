@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { useStore } from '@/lib/store';
+import { useStore, useShiftPatterns } from '@/lib/store';
 import type { User, ShiftType, RequestType } from '@/lib/types';
-import { SHIFT_PRESETS } from '@/lib/types';
+import { enabledPatterns, findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
 
 interface Props {
   users: User[];
@@ -19,13 +19,15 @@ interface Props {
 export default function ShiftRequestModal({ users, defaultDate, defaultStartTime, defaultEndTime, createdBy, onClose, onSaved }: Props) {
   useBodyScrollLock();
   const { storeId } = useStore();
+  const patterns = useShiftPatterns();
+  const firstPattern = enabledPatterns(patterns)[0] ?? patterns[0];
 
   const hasCustomTime = !!defaultStartTime && !!defaultEndTime;
   const [requestType, setRequestType] = useState<RequestType>('targeted');
   const [date, setDate] = useState(defaultDate ?? '');
-  const [shiftType, setShiftType] = useState<Exclude<ShiftType, 'off'> | 'custom'>(hasCustomTime ? 'custom' : 'A');
-  const [startTime, setStartTime] = useState(defaultStartTime ?? SHIFT_PRESETS.A.start);
-  const [endTime, setEndTime] = useState(defaultEndTime ?? SHIFT_PRESETS.A.end);
+  const [shiftType, setShiftType] = useState<Exclude<ShiftType, 'off'> | 'custom'>(hasCustomTime ? 'custom' : firstPattern.key);
+  const [startTime, setStartTime] = useState(defaultStartTime ?? firstPattern.start);
+  const [endTime, setEndTime] = useState(defaultEndTime ?? firstPattern.end);
   const [message, setMessage] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -34,9 +36,11 @@ export default function ShiftRequestModal({ users, defaultDate, defaultStartTime
   const staffUsers = users.filter(u => u.role === 'staff');
 
   function selectPreset(type: Exclude<ShiftType, 'custom' | 'off'>) {
+    const p = findPattern(patterns, type);
+    if (!p) return;
     setShiftType(type);
-    setStartTime(SHIFT_PRESETS[type].start);
-    setEndTime(SHIFT_PRESETS[type].end);
+    setStartTime(p.start);
+    setEndTime(p.end);
   }
 
   function toggleUser(id: string) {
@@ -145,17 +149,18 @@ export default function ShiftRequestModal({ users, defaultDate, defaultStartTime
           <div>
             <label className="block text-[11px] font-medium text-slate-500 mb-1">希望シフト</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
-              {(Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom' | 'off'>[]).map(t => (
+              {enabledPatterns(patterns).map(p => (
                 <button
-                  key={t}
-                  onClick={() => selectPreset(t)}
+                  key={p.key}
+                  onClick={() => selectPreset(p.key)}
+                  title={`${patternTitle(p)}　${patternTimeRange(p)}`}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                    shiftType === t
+                    shiftType === p.key
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  {t}
+                  {p.key}
                 </button>
               ))}
               <button

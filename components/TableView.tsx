@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, forwardRef } from 'react';
 import { getDaysInMonth, formatDate, getDayLabel, netWorkMinutes, formatTotalHours } from '@/lib/shifts';
-import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
+import { SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
 import type { User } from '@/lib/types';
 
 interface Props {

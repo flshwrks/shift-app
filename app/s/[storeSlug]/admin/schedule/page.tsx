@@ -7,10 +7,11 @@ import TimelineView from '@/components/TimelineView';
 import ShiftDetailModal from '@/components/ShiftDetailModal';
 import ShiftRequestModal from '@/components/ShiftRequestModal';
 import type { Shift, User, ShiftType } from '@/lib/types';
-import { SHIFT_PRESETS, SHIFT_COLORS } from '@/lib/types';
+import { SHIFT_COLORS } from '@/lib/types';
+import { enabledPatterns, findPattern, patternTitle, patternTimeRange } from '@/lib/shiftPatterns';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useAuth } from '@/lib/auth';
-import { useStore } from '@/lib/store';
+import { useStore, useShiftPatterns } from '@/lib/store';
 import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import { useTableExport } from '@/lib/useTableExport';
 import { IconChevronLeft, IconChevronRight, IconDownload, IconCheck } from '@/components/icons';
@@ -42,9 +43,12 @@ function ShiftModal({
   const existing = state.shift;
   const [userId, setUserId] = useState(state.userId);
   const [date, setDate] = useState(state.date);
-  const [shiftType, setShiftType] = useState<ShiftType>(existing?.shift_type ?? 'A');
-  const [startTime, setStartTime] = useState(existing?.start_time ?? SHIFT_PRESETS.A.start);
-  const [endTime, setEndTime] = useState(existing?.end_time ?? SHIFT_PRESETS.A.end);
+  const patterns = useShiftPatterns();
+  // 入力の初期値は「使う」枠の先頭。既存シフトの編集時はその行の時刻をそのまま出す
+  const first = enabledPatterns(patterns)[0] ?? patterns[0];
+  const [shiftType, setShiftType] = useState<ShiftType>(existing?.shift_type ?? first.key);
+  const [startTime, setStartTime] = useState(existing?.start_time ?? first.start);
+  const [endTime, setEndTime] = useState(existing?.end_time ?? first.end);
   const [comment, setComment] = useState(existing?.comment ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,9 +58,11 @@ function ShiftModal({
   const dateOptions = days.map(d => formatDate(d));
 
   function selectPreset(type: Exclude<ShiftType, 'custom' | 'off'>) {
+    const p = findPattern(patterns, type);
+    if (!p) return;
     setShiftType(type);
-    setStartTime(SHIFT_PRESETS[type].start);
-    setEndTime(SHIFT_PRESETS[type].end);
+    setStartTime(p.start);
+    setEndTime(p.end);
   }
 
   const handleSave = async () => {
@@ -119,17 +125,18 @@ function ShiftModal({
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">シフト種別</label>
             <div className="grid grid-cols-4 gap-1 mb-2">
-              {(Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom' | 'off'>[]).map(type => (
+              {enabledPatterns(patterns).map(p => (
                 <button
-                  key={type}
-                  onClick={() => selectPreset(type)}
+                  key={p.key}
+                  onClick={() => selectPreset(p.key)}
+                  title={`${patternTitle(p)}　${patternTimeRange(p)}`}
                   className="py-1.5 rounded-lg text-xs font-bold text-white transition-opacity"
                   style={{
-                    backgroundColor: SHIFT_COLORS[type],
-                    opacity: shiftType === type ? 1 : 0.4,
+                    backgroundColor: SHIFT_COLORS[p.key],
+                    opacity: shiftType === p.key ? 1 : 0.4,
                   }}
                 >
-                  {type}
+                  {p.key}
                 </button>
               ))}
               <button

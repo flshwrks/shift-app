@@ -1,18 +1,18 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { useStore } from '@/lib/store';
+import { useStore, useShiftPatterns } from '@/lib/store';
 import { usePersistedMonth } from '@/lib/usePersistedMonth';
 import { supabase } from '@/lib/supabase';
 import {
   getDaysInMonth, formatDate, formatYM, monthStart, monthEnd, getDayLabel, isWeekend,
   netWorkMinutes, formatTotalHours,
 } from '@/lib/shifts';
-import { SHIFT_PRESETS, SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
+import { SHIFT_COLORS, type Shift, type ShiftType } from '@/lib/types';
+import { enabledPatterns, findPattern, patternTitle } from '@/lib/shiftPatterns';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { IconClipboard, IconCheck, IconChevronLeft, IconChevronRight } from '@/components/icons';
 
-const SHIFT_LIST = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 interface DayShift {
   shiftType: ShiftType | null;
@@ -50,6 +50,7 @@ function OverwriteConfirmModal({ message, onConfirm, onCancel }: { message: stri
 export default function ShiftsPage() {
   const { user } = useAuth();
   const { storeId } = useStore();
+  const patterns = useShiftPatterns();
   const now = new Date();
   const { year, month, setYearMonth, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth, wasRestored } = usePersistedMonth('month_staff_shifts');
   const [days, setDays] = useState<Date[]>([]);
@@ -211,8 +212,8 @@ export default function ShiftsPage() {
   };
 
   const selectType = (type: ShiftType | null) => {
-    if (type && type !== 'custom' && type !== 'off') {
-      const p = SHIFT_PRESETS[type as Exclude<ShiftType, 'custom' | 'off'>];
+    const p = type && type !== 'custom' && type !== 'off' ? findPattern(patterns, type) : null;
+    if (p) {
       setEditShift(e => ({ ...e, shiftType: type, startTime: p.start, endTime: p.end }));
     } else {
       setEditShift(e => ({ ...e, shiftType: type }));
@@ -483,15 +484,14 @@ export default function ShiftsPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4">
         <p className="text-[11px] font-medium text-slate-500 mb-2">シフト種別</p>
         <div className="grid grid-cols-3 gap-1.5">
-          {SHIFT_LIST.map(type => {
-            const p = SHIFT_PRESETS[type];
-            return (
-              <div key={type} className="flex items-center gap-1.5">
-                <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[type] }}>{type}</span>
-                <span className="text-[11px] text-slate-500 tabular-nums">{p.start}〜{p.end}</span>
-              </div>
-            );
-          })}
+          {enabledPatterns(patterns).map(p => (
+            <div key={p.key} className="flex items-center gap-1.5">
+              <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: SHIFT_COLORS[p.key] }}>{p.key}</span>
+              <span className="text-[11px] text-slate-500 tabular-nums truncate">
+                {p.label.trim() ? `${p.label.trim()} ` : ''}{p.start}〜{p.end}
+              </span>
+            </div>
+          ))}
           <div className="flex items-center gap-1.5">
             <span className="w-5 h-5 rounded-md flex items-center justify-center bg-slate-400 text-white text-[10px] font-bold flex-shrink-0">自</span>
             <span className="text-[11px] text-slate-500">カスタム</span>
@@ -703,20 +703,20 @@ export default function ShiftsPage() {
 
             {/* シフト種別ボタン */}
             <div className="grid grid-cols-2 gap-2 mb-3">
-              {SHIFT_LIST.map(type => {
-                const p = SHIFT_PRESETS[type];
-                const selected = editShift.shiftType === type;
+              {enabledPatterns(patterns).map(p => {
+                const selected = editShift.shiftType === p.key;
                 return (
                   <button
-                    key={type}
-                    onClick={() => selectType(type)}
+                    key={p.key}
+                    onClick={() => selectType(p.key)}
                     className={`flex items-center gap-3 p-3.5 rounded-lg border-2 transition-all active:scale-[0.97] text-left ${
                       selected ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700'
                     }`}
-                    style={selected ? { backgroundColor: SHIFT_COLORS[type] } : {}}
+                    style={selected ? { backgroundColor: SHIFT_COLORS[p.key] } : {}}
                   >
-                    <span className={`text-xl font-black ${selected ? 'text-white' : ''}`}>{type}</span>
-                    <span className={`text-xs leading-tight ${selected ? 'text-white/90' : 'text-slate-500'}`}>
+                    <span className={`text-xl font-black ${selected ? 'text-white' : ''}`}>{p.key}</span>
+                    <span className={`text-xs leading-tight min-w-0 ${selected ? 'text-white/90' : 'text-slate-500'}`}>
+                      {p.label.trim() && <span className="block truncate font-medium">{p.label.trim()}</span>}
                       {p.start}<br />〜{p.end}
                     </span>
                   </button>

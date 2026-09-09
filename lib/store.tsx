@@ -2,11 +2,16 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
+import {
+  DEFAULT_PATTERNS, SETTINGS_KEY, parsePatterns, type ShiftPattern,
+} from './shiftPatterns';
 
 export interface StoreContextValue {
   storeId: string;
   storeSlug: string;
   storeName: string;
+  /** 店舗ごとのシフトパターン（未設定なら既定値）。A〜Gの7枠が常に揃う */
+  patterns: ShiftPattern[];
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -36,9 +41,26 @@ export function StoreProvider({
       .select('id, name')
       .eq('slug', storeSlug)
       .single()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (cancelled) return;
-        setState(error || !data ? 'not-found' : { storeId: data.id, storeSlug, storeName: data.name });
+        if (error || !data) { setState('not-found'); return; }
+
+        // パターンの取得に失敗しても店舗の解決は止めない。
+        // 設定が読めないだけでシフト画面が開かなくなるほうが困るため、既定値で続行する。
+        const { data: row } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('store_id', data.id)
+          .eq('key', SETTINGS_KEY)
+          .maybeSingle<{ value: string }>();
+        if (cancelled) return;
+
+        setState({
+          storeId: data.id,
+          storeSlug,
+          storeName: data.name,
+          patterns: row?.value ? parsePatterns(row.value) : DEFAULT_PATTERNS.map(p => ({ ...p })),
+        });
       });
 
     return () => {
@@ -73,4 +95,11 @@ export function useStore(): StoreContextValue {
 // 共有コンポーネントはこちらを使うこと。
 export function useStoreOptional(): StoreContextValue | null {
   return useContext(StoreContext);
+}
+
+// 店舗のシフトパターン。本部配下など Provider の外で呼ばれた場合は既定値を返す
+// （ヘルプなど、店舗に属さない画面でも凡例を出せるようにするため）。
+export function useShiftPatterns(): ShiftPattern[] {
+  const ctx = useContext(StoreContext);
+  return ctx?.patterns ?? DEFAULT_PATTERNS;
 }

@@ -3,18 +3,20 @@ import { useRef, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { SectionIcon } from '@/components/icons';
 import { HELP_CONTENT, type SectionColor } from '@/lib/help/content';
-import { SHIFT_COLORS, SHIFT_PRESETS, type ShiftType } from '@/lib/types';
+import { SHIFT_COLORS } from '@/lib/types';
+import { useShiftPatterns } from '@/lib/store';
+import { enabledPatterns, patternTimeRange } from '@/lib/shiftPatterns';
 
-/** 表示用に先頭0を省く（"08:00" → "8:00"） */
-function trimLeadingZero(time: string): string {
-  return time.startsWith('0') ? time.slice(1) : time;
+// 凡例は店舗ごとのパターンから作る。本部配下など店舗が定まらない画面では既定値になる
+function useShiftTypeLegend() {
+  const patterns = useShiftPatterns();
+  return enabledPatterns(patterns).map(p => ({
+    type: p.key,
+    color: SHIFT_COLORS[p.key],
+    label: p.label.trim(),
+    time: patternTimeRange(p),
+  }));
 }
-
-const SHIFT_TYPES = (Object.keys(SHIFT_PRESETS) as Exclude<ShiftType, 'custom' | 'off'>[]).map((type) => ({
-  type,
-  color: SHIFT_COLORS[type],
-  time: `${trimLeadingZero(SHIFT_PRESETS[type].start)}〜${trimLeadingZero(SHIFT_PRESETS[type].end)}`,
-}));
 
 const colorAccent: Record<SectionColor, { bg: string; text: string; light: string; border: string }> = {
   blue:   { bg: 'bg-blue-600',   text: 'text-blue-600',   light: 'bg-blue-50',   border: 'border-blue-200' },
@@ -29,6 +31,7 @@ interface Props {
 }
 
 export default function HelpModal({ role, onClose }: Props) {
+  const shiftTypes = useShiftTypeLegend();
   useBodyScrollLock();
 
   const sections = HELP_CONTENT[role];
@@ -147,12 +150,14 @@ export default function HelpModal({ role, onClose }: Props) {
                     <div className="mb-4 bg-slate-50 rounded-xl p-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">シフト種別早見表</p>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {SHIFT_TYPES.map(({ type, color, time }) => (
-                          <div key={type} className="flex items-center gap-1.5">
+                        {shiftTypes.map(({ type, color, label, time }) => (
+                          <div key={type} className="flex items-center gap-1.5 min-w-0">
                             <span className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: color }}>
                               {type}
                             </span>
-                            <span className="text-[11px] text-slate-500">{time}</span>
+                            <span className="text-[11px] text-slate-500 truncate">
+                              {label ? `${label} ` : ''}{time}
+                            </span>
                           </div>
                         ))}
                         <div className="flex items-center gap-1.5">

@@ -2,9 +2,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { useStore } from '@/lib/store';
+import { useStore, useShiftPatterns } from '@/lib/store';
 import type { ShiftRequest, ShiftRequestTarget } from '@/lib/types';
-import { SHIFT_PRESETS } from '@/lib/types';
+import { findPattern, patternTitle } from '@/lib/shiftPatterns';
 import { IconInbox, IconClipboard } from '@/components/icons';
 
 type Tab = 'pending' | 'past';
@@ -21,6 +21,7 @@ interface RequestWithTarget extends ShiftRequest {
 export default function StaffRequestsPage() {
   const { user } = useAuth();
   const { storeId } = useStore();
+  const patterns = useShiftPatterns();
   const [tab, setTab] = useState<Tab>('pending');
   const [requests, setRequests] = useState<RequestWithTarget[]>([]);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -196,10 +197,12 @@ export default function StaffRequestsPage() {
     fetchRequests();
   };
 
+  // 募集そのものは start_time / end_time を持っているので、時刻は必ずその行の値を出す。
+  // パターン定義を後から変えても、過去の募集の時刻が書き換わって見えないようにするため。
   const getShiftLabel = (req: ShiftRequest) => {
     if (req.shift_type && req.shift_type !== 'custom') {
-      const preset = SHIFT_PRESETS[req.shift_type as Exclude<typeof req.shift_type, 'custom' | null>];
-      if (preset) return `${preset.label}（${preset.start}〜${preset.end}）`;
+      const p = findPattern(patterns, req.shift_type);
+      if (p) return `${patternTitle(p)}（${req.start_time}〜${req.end_time}）`;
     }
     return `${req.start_time}〜${req.end_time}`;
   };
