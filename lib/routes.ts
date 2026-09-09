@@ -13,7 +13,10 @@ export const HQ_ERRORS = '/admin/errors';
 // アプリ外にある「使い方の完全版」。役割ごとの手順を画面の図つきで載せた読み物で、
 // アプリ内ヘルプ（HelpModal）に入りきらない粒度をこちらが受け持つ。
 // アプリ内ヘルプ = 操作中に開く早見表、こちら = 最初に通して読む説明、という分担。
-export const FULL_GUIDE_URL = 'https://claude.ai/code/artifact/d20ce750-d2b4-4ceb-9392-ca5cf904bf1d';
+// 詳しい使い方はアプリ内に置く。外部サイトに置くと、読む人（スタッフ）が
+// そのサービスのアカウントを必要としたり、アプリを引き継ぐ人が別サービスの
+// 管理まで引き継ぐことになるため。
+export const FULL_GUIDE_PATH = '/guide';
 
 export function storeLoginPath(storeSlug: string): string {
   return `/s/${storeSlug}/login`;
