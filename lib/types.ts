@@ -16,7 +16,12 @@ export interface User {
   store_id?: string | null;
 }
 
-export type ShiftType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'custom' | 'off';
+// H〜L は 2026-09-09 に追加した予備の枠（シフト種別を12件まで増やせるようにするため）。
+// DB側の CHECK 制約も A〜L を許可している（migrations/2026-09-09_shift_type_slots.sql）。
+export type ShiftType =
+  | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'
+  | 'H' | 'I' | 'J' | 'K' | 'L'
+  | 'custom' | 'off';
 export type ShiftStatus = 'draft' | 'confirmed';
 
 export interface Shift {
@@ -52,7 +57,9 @@ export function isHqRole(role: UserRole): boolean {
   return role === 'hq_admin' || role === 'developer';
 }
 
-export const SHIFT_PRESETS: Record<Exclude<ShiftType, 'custom' | 'off'>, { start: string; end: string; label: string }> = {
+// 初期状態のシフト種別。店舗が何も設定していないときの既定値で、H〜L は含まない
+// （追加した枠は 09:00〜18:00 から始まる。lib/shiftPatterns.ts）。
+export const SHIFT_PRESETS: Record<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G', { start: string; end: string; label: string }> = {
   A: { start: '08:00', end: '13:00', label: 'A  8:00〜13:00' },
   B: { start: '09:00', end: '14:00', label: 'B  9:00〜14:00' },
   C: { start: '08:00', end: '17:00', label: 'C  8:00〜17:00' },
@@ -70,6 +77,12 @@ export const SHIFT_COLORS: Record<ShiftType, string> = {
   E: '#EF4444',
   F: '#EC4899',
   G: '#0EA5E9',
+  // 2026-09-09 追加分。既存7色と隣り合っても見分けられる色を選ぶ
+  H: '#7C3AED',
+  I: '#059669',
+  J: '#DB2777',
+  K: '#D97706',
+  L: '#0891B2',
   custom: '#6B7280',
   off: '#94A3B8',
 };

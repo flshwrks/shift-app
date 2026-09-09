@@ -4,15 +4,16 @@ import { SHIFT_PRESETS, type ShiftType } from './types';
  * 店舗ごとのシフト種別。
  *
  * 店舗が触れるのは「並び順・表示名・時間帯」と、種別そのものの追加／削除。
- * 内部では A〜G の記号を id として使い続ける。
+ * 内部では A〜L の記号を id として使い続ける。
  *
  * ★記号(key)は一度割り当てたら変えない。
  *   `shifts.shift_type` に保存されているのがこの記号なので、並べ替えのたびに
  *   振り直すと**過去のシフトが別の種別を指してしまう**。並び順は配列の順序で
  *   持ち、記号は識別子として固定する。
  *
- * ★記号が A〜G なのは `shifts.shift_type` のCHECK制約に合わせるため。
- *   そのため種別は最大7つ。増やすには制約と SHIFT_COLORS の拡張が要る。
+ * ★記号は `shifts.shift_type` / `shift_requests.shift_type` のCHECK制約と一致させる。
+ *   そのため種別は最大12件（A〜L）。さらに増やすには制約と SHIFT_COLORS の拡張が要る。
+ *   初期状態は従来どおり A〜G の7件で、H以降は追加したときだけ現れる。
  *
  * 保存先は app_settings の (store_id, 'shift_patterns') に JSON文字列。
  * 提出期間などと同じ「使うときに upsert される」方式で、マイグレーション不要。
@@ -21,8 +22,15 @@ import { SHIFT_PRESETS, type ShiftType } from './types';
 /** 種別に使える記号。custom / off は固定の特別扱いなので含まない */
 export type PatternKey = Exclude<ShiftType, 'custom' | 'off'>;
 
-export const PATTERN_KEYS: readonly PatternKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+// 使える記号は A〜L の12件。DB側の CHECK 制約と一致させること
+// （migrations/2026-09-09_shift_type_slots.sql）。
+// 12で止めているのはDBの都合ではなく、記号ごとの色を見分けられる上限のため。
+export const PATTERN_KEYS: readonly PatternKey[] =
+  ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export const MAX_PATTERNS = PATTERN_KEYS.length;
+
+/** 初期状態として並べる記号。追加した H 以降は既定値には含めない */
+const DEFAULT_KEYS = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
 
 export interface ShiftPattern {
   /** 記号。一度決めたら変わらない（過去のシフトが参照しているため） */
@@ -39,8 +47,8 @@ export const SETTINGS_KEY = 'shift_patterns';
 export const NEW_PATTERN_START = '09:00';
 export const NEW_PATTERN_END = '18:00';
 
-/** 未設定の店舗に使う既定値（従来の A〜G と同じ） */
-export const DEFAULT_PATTERNS: ShiftPattern[] = PATTERN_KEYS.map(key => ({
+/** 未設定の店舗に使う既定値（従来の A〜G の7件） */
+export const DEFAULT_PATTERNS: ShiftPattern[] = DEFAULT_KEYS.map(key => ({
   key,
   label: '',
   start: SHIFT_PRESETS[key].start,
@@ -87,7 +95,10 @@ export function parsePatterns(raw: string | null | undefined): ShiftPattern[] {
     if (src.enabled === false) continue; // 旧形式の「使わない」
     seen.add(src.key);
 
-    const def = SHIFT_PRESETS[src.key];
+    // H以降は既定の時間帯を持たないため、追加時と同じ値で補う
+    const def = src.key in SHIFT_PRESETS
+      ? SHIFT_PRESETS[src.key as keyof typeof SHIFT_PRESETS]
+      : { start: NEW_PATTERN_START, end: NEW_PATTERN_END };
     out.push({
       key: src.key,
       label: typeof src.label === 'string' ? src.label.slice(0, 12) : '',

@@ -2,9 +2,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
-import {
-  DEFAULT_PATTERNS, SETTINGS_KEY, parsePatterns, type ShiftPattern,
-} from './shiftPatterns';
+import { DEFAULT_PATTERNS, parsePatterns, type ShiftPattern } from './shiftPatterns';
 
 export interface StoreContextValue {
   storeId: string;
@@ -45,21 +43,21 @@ export function StoreProvider({
         if (cancelled) return;
         if (error || !data) { setState('not-found'); return; }
 
-        // パターンの取得に失敗しても店舗の解決は止めない。
-        // 設定が読めないだけでシフト画面が開かなくなるほうが困るため、既定値で続行する。
-        const { data: row } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('store_id', data.id)
-          .eq('key', SETTINGS_KEY)
-          .maybeSingle<{ value: string }>();
+        // ★app_settings を直接SELECTしない。
+        //   ここは AuthProvider がJWTを取得し終える前に走るため、匿名として
+        //   問い合わせることになり、RLSで0件になって設定が読めなかった
+        //   （表示名や時間帯が保存されないように見える不具合の原因）。
+        //   SECURITY DEFINER のRPC経由で、シフト種別だけを読む。
+        // 取得に失敗しても店舗の解決は止めない。設定が読めないだけで
+        // シフト画面が開かなくなるほうが困るため、既定値で続行する。
+        const { data: raw } = await supabase.rpc('get_shift_patterns', { p_store_slug: storeSlug });
         if (cancelled) return;
 
         setState({
           storeId: data.id,
           storeSlug,
           storeName: data.name,
-          patterns: row?.value ? parsePatterns(row.value) : DEFAULT_PATTERNS.map(p => ({ ...p })),
+          patterns: parsePatterns(typeof raw === 'string' ? raw : null),
         });
       });
 

@@ -14,12 +14,19 @@ const clone = (): ShiftPattern[] => DEFAULT_PATTERNS.map(p => ({ ...p }));
 const keys = (ps: ShiftPattern[]) => ps.map(p => p.key);
 
 describe('既定値', () => {
-  test('A〜Gの7件がそろい、従来の時間帯と一致する', () => {
-    assert.equal(DEFAULT_PATTERNS.length, MAX_PATTERNS);
+  test('初期状態は A〜G の7件（H以降は追加したときだけ現れる）', () => {
+    assert.deepEqual(keys(DEFAULT_PATTERNS), ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
     for (const p of DEFAULT_PATTERNS) {
-      assert.equal(p.start, SHIFT_PRESETS[p.key].start);
-      assert.equal(p.end, SHIFT_PRESETS[p.key].end);
+      const def = SHIFT_PRESETS[p.key as keyof typeof SHIFT_PRESETS];
+      assert.equal(p.start, def.start);
+      assert.equal(p.end, def.end);
     }
+  });
+
+  test('使える記号は A〜L の12件。DBのCHECK制約と一致させること', () => {
+    assert.equal(MAX_PATTERNS, 12);
+    assert.deepEqual([...PATTERN_KEYS],
+      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']);
   });
 });
 
@@ -54,6 +61,23 @@ describe('parsePatterns：壊れた値でも止まらない', () => {
     const got = parsePatterns(raw);
     assert.equal(got[0].start, SHIFT_PRESETS.A.start);
     assert.equal(got[0].end, SHIFT_PRESETS.A.end);
+  });
+
+  test('追加した記号(H以降)も読み戻せる', () => {
+    const raw = JSON.stringify([
+      { key: 'A', label: '', start: '08:00', end: '13:00' },
+      { key: 'H', label: '中番', start: '11:00', end: '20:00' },
+    ]);
+    const got = parsePatterns(raw);
+    assert.deepEqual(keys(got), ['A', 'H']);
+    assert.equal(got[1].label, '中番');
+    assert.equal(got[1].start, '11:00');
+  });
+
+  test('H以降で時刻が壊れていれば追加時の既定値で補う', () => {
+    const got = parsePatterns(JSON.stringify([{ key: 'H', start: 'x', end: 'y' }]));
+    assert.equal(got[0].start, NEW_PATTERN_START);
+    assert.equal(got[0].end, NEW_PATTERN_END);
   });
 
   test('知らない記号と重複は捨てる', () => {
@@ -113,9 +137,16 @@ describe('増やす', () => {
     assert.equal(added[1].label, '');
   });
 
-  test('7件を超えては追加できない', () => {
-    const full = clone();
-    assert.equal(nextAvailableKey(full), null);
+  test('既定の7件のあとは H から続く', () => {
+    assert.equal(nextAvailableKey(clone()), 'H');
+    assert.deepEqual(keys(addPattern(clone())).slice(-1), ['H']);
+  });
+
+  test('12件を超えては追加できない', () => {
+    let full = clone();
+    while (nextAvailableKey(full)) full = addPattern(full);
+    assert.equal(full.length, MAX_PATTERNS);
+    assert.deepEqual(keys(full).slice(-5), ['H', 'I', 'J', 'K', 'L']);
     assert.deepEqual(addPattern(full), full, '何も起きない');
   });
 });
@@ -136,7 +167,7 @@ describe('減らす', () => {
   });
 
   test('存在しない記号を指定しても壊れない', () => {
-    assert.deepEqual(keys(removePattern(clone(), 'Z')), [...PATTERN_KEYS]);
+    assert.deepEqual(keys(removePattern(clone(), 'Z')), keys(clone()));
   });
 });
 
@@ -150,8 +181,8 @@ describe('入れ替える', () => {
   });
 
   test('端を越える指定は何もしない', () => {
-    assert.deepEqual(keys(movePattern(clone(), 'A', -1)), [...PATTERN_KEYS]);
-    assert.deepEqual(keys(movePattern(clone(), 'G', 1)), [...PATTERN_KEYS]);
+    assert.deepEqual(keys(movePattern(clone(), 'A', -1)), keys(clone()));
+    assert.deepEqual(keys(movePattern(clone(), 'G', 1)), keys(clone()));
   });
 
   test('並べ替えても記号と時間帯の対応は変わらない（過去のシフトが壊れない）', () => {
@@ -163,7 +194,7 @@ describe('入れ替える', () => {
   test('元の配列を書き換えない', () => {
     const src = clone();
     movePattern(src, 'C', -1);
-    assert.deepEqual(keys(src), [...PATTERN_KEYS]);
+    assert.deepEqual(keys(src), ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
   });
 });
 
