@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildSessionCookieValue, constantTimeEqual, SESSION_COOKIE } from '@/lib/session';
+import { DEV_SECRET_MIN_LENGTH } from '@/lib/reauth';
 import { signJwtForSession } from '@/lib/supabaseJwt';
 import type { SessionUser } from '@/lib/types';
 
@@ -14,7 +15,6 @@ import type { SessionUser } from '@/lib/types';
 // 対策は3つ。いずれもこの入口だけに効かせている（店舗ログインは
 // verify_login 側のDBロックで保護されているため、IP単位の制限を掛けると
 // 店舗の共有Wi-Fiから複数人がログインできなくなる副作用のほうが大きい）。
-const MIN_SECRET_LENGTH = 24;   // 短い値は事故のもとなので、設定ミスとして拒否する
 const MAX_ATTEMPTS = 5;         // 同一IPからの失敗許容回数
 const WINDOW_MS = 10 * 60 * 1000;
 const FAILURE_DELAY_MS = 700;   // 総当たりの試行速度を落とす
@@ -49,8 +49,8 @@ export async function POST(request: Request) {
   const ip = clientIp(request);
 
   // 未設定・短すぎる場合は開くより閉じる。安全側に倒す
-  if (!secret || secret.length < MIN_SECRET_LENGTH) {
-    console.warn(`[dev-login] DEV_LOGIN_PASSWORD が未設定または${MIN_SECRET_LENGTH}文字未満のため拒否した`);
+  if (!secret || secret.length < DEV_SECRET_MIN_LENGTH) {
+    console.warn(`[dev-login] DEV_LOGIN_PASSWORD が未設定または${DEV_SECRET_MIN_LENGTH}文字未満のため拒否した`);
     return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 });
   }
 

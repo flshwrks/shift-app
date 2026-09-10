@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { canDeleteHqAdmin, canDemoteHqAdmin, validateHqAdminInput } from '../lib/hqAdmins';
+import { canDeleteHqAdmin, canDemoteHqAdmin, validateHqAdminInput, validateSelfSecret } from '../lib/hqAdmins';
 
 describe('本部管理者の削除', () => {
   test('他の人が2人以上いれば削除できる', () => {
@@ -72,5 +72,35 @@ describe('入力の検証', () => {
     assert.equal(validateHqAdminInput('   ', '1234', true).ok, false, '空白だけは名前なし');
     assert.deepEqual(validateHqAdminInput('あ'.repeat(20), '1234', true), { ok: true });
     assert.equal(validateHqAdminInput('あ'.repeat(21), '1234', true).ok, false);
+  });
+});
+
+// 再認証（追加・削除・PINの再発行の直前に本人確認を求める）の入力チェック。
+// 照合そのものは lib/reauth.ts がDBと環境変数に触るため、ここでは形式だけを見る
+describe('再認証の入力チェック', () => {
+  test('本部管理者は自分のPINを数字4桁で入れる', () => {
+    assert.deepEqual(validateSelfSecret('hq_admin', '1234'), { ok: true });
+  });
+
+  test('空・桁数違い・数字以外は弾く', () => {
+    for (const bad of ['', '123', '12345', '12a4', ' 1234']) {
+      assert.equal(validateSelfSecret('hq_admin', bad).ok, false, `弾けていない: ${JSON.stringify(bad)}`);
+    }
+  });
+
+  test('developer は4桁ではなく開発者パスワードなので桁数で縛らない', () => {
+    assert.deepEqual(validateSelfSecret('developer', 'a'.repeat(32)), { ok: true });
+    assert.deepEqual(validateSelfSecret('developer', '1234'), { ok: true });
+  });
+
+  test('developer でも空欄は弾く', () => {
+    assert.equal(validateSelfSecret('developer', '').ok, false);
+  });
+
+  test('弾いたときは何を入れるべきかが文面から分かる', () => {
+    const hq = validateSelfSecret('hq_admin', '');
+    assert.match(hq.ok === false ? hq.reason : '', /あなたのPIN/);
+    const dev = validateSelfSecret('developer', '');
+    assert.match(dev.ok === false ? dev.reason : '', /開発者パスワード/);
   });
 });

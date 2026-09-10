@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import type { UserRole } from '@/lib/types';
 
 // 本部管理者アカウントの管理。
 //
@@ -9,14 +10,58 @@ import { useCallback, useEffect, useState } from 'react';
 //
 // ★本部管理者が0人になると誰も本部管理画面に入れなくなる。
 //   「自分は消せない」「最後の1人は消せない」の2つで防いでいる（lib/hqAdmins.ts）。
+//
+// ★権限が増える操作（追加・削除・PINの再発行）の直前に、操作している本人の
+//   合言葉をもう一度求める。ログインしたままの端末を他人が触っても、
+//   あとから消えない侵入経路を作れないようにするため（lib/reauth.ts）。
 
 interface HqAdmin { id: string; name: string; created_at: string }
 
 const PIN_HINT = '数字4桁';
 
+// この人数を超えたら、覚えのない名前が混じっていないか気づけるように注意書きを出す。
+// 上限で止めないのは、増やせないこと自体が困る会社もあるため（見えるようにするだけ）
+const MANY_ADMINS = 4;
+
+/**
+ * 再認証の入力欄。追加・削除・PINの再発行の3か所で使う。
+ * developer だけはDBに行が無く、ログインにも4桁PINを使わないので入力条件を分ける。
+ */
+function SelfSecretField({
+  value, onChange, isDeveloper, onEnter,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  isDeveloper: boolean;
+  onEnter?: () => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">
+        確認：{isDeveloper ? '開発者パスワード' : 'あなたのPIN'} *
+      </label>
+      <input
+        type="password"
+        inputMode={isDeveloper ? 'text' : 'numeric'}
+        autoComplete="off"
+        value={value}
+        maxLength={isDeveloper ? 200 : 4}
+        onChange={e => onChange(isDeveloper ? e.target.value : e.target.value.replace(/\D/g, ''))}
+        onKeyDown={e => { if (e.key === 'Enter' && onEnter) onEnter(); }}
+        placeholder={isDeveloper ? '' : '••••'}
+        className="w-full sm:max-w-[12rem] border border-slate-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400"
+      />
+      <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+        本人確認のため、{isDeveloper ? 'ログインに使うパスワード' : 'あなたがログインに使うPIN'}をもう一度入力してください
+      </p>
+    </div>
+  );
+}
+
 export default function HqAdminsPage() {
   const [admins, setAdmins] = useState<HqAdmin[]>([]);
   const [selfId, setSelfId] = useState('');
+  const [selfRole, setSelfRole] = useState<UserRole | ''>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -24,12 +69,17 @@ export default function HqAdminsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState('');
   const [addPin, setAddPin] = useState('');
+  const [addSecret, setAddSecret] = useState('');
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editPin, setEditPin] = useState('');
+  const [editSecret, setEditSecret] = useState('');
 
   const [confirmDelete, setConfirmDelete] = useState<HqAdmin | null>(null);
+  const [deleteSecret, setDeleteSecret] = useState('');
+
+  const isDeveloper = selfRole === 'developer';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +88,7 @@ export default function HqAdminsPage() {
     if (!res.ok) { setError(body.error ?? '読み込みに失敗しました'); setLoading(false); return; }
     setAdmins(body.admins ?? []);
     setSelfId(body.selfId ?? '');
+    setSelfRole(body.selfRole ?? '');
     setLoading(false);
   }, []);
 
@@ -52,6 +103,9 @@ export default function HqAdminsPage() {
       body: JSON.stringify(payload),
     });
     setBusyId(null);
+    // 合言葉はどの経路でも入れっぱなしにしない。成否で分けず、
+    // 唯一の送信口であるここで消すことで「消し忘れる経路」を作らない
+    setAddSecret(''); setEditSecret(''); setDeleteSecret('');
     const body = await res.json().catch(() => ({}));
     if (!res.ok) { setError(body.error ?? '処理に失敗しました'); return false; }
     await load();
@@ -59,32 +113,39 @@ export default function HqAdminsPage() {
   };
 
   const handleAdd = async () => {
-    if (await send('POST', { name: addName, pin: addPin }, 'new')) {
+    if (await send('POST', { name: addName, pin: addPin, secret: addSecret }, 'new')) {
       setAddName(''); setAddPin(''); setShowAdd(false);
     }
   };
 
   const handleSave = async (id: string) => {
-    if (await send('PATCH', { id, name: editName, pin: editPin }, id)) {
+    if (await send('PATCH', { id, name: editName, pin: editPin, secret: editSecret }, id)) {
       setEditId(null); setEditPin('');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (await send('DELETE', { id }, id)) setConfirmDelete(null);
+    if (await send('DELETE', { id, secret: deleteSecret }, id)) setConfirmDelete(null);
   };
 
   const openEdit = (a: HqAdmin) => {
-    setEditId(a.id); setEditName(a.name); setEditPin(''); setError('');
+    setEditId(a.id); setEditName(a.name); setEditPin(''); setEditSecret(''); setError('');
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900">本部管理者</h2>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">本部管理者</h2>
+          {!loading && (
+            <span className="text-xs font-medium text-slate-500 tabular-nums bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+              {admins.length}人
+            </span>
+          )}
+        </div>
         <button
           onClick={() => { setShowAdd(true); setError(''); }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 flex-shrink-0"
         >
           + 本部管理者を追加
         </button>
@@ -114,15 +175,28 @@ export default function HqAdminsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">PIN *</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">この人のPIN *</label>
               <input
                 type="text" inputMode="numeric" value={addPin} maxLength={4}
                 onChange={e => setAddPin(e.target.value.replace(/\D/g, ''))} placeholder="0000"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
-              <p className="text-[11px] text-slate-400 mt-1">{PIN_HINT}</p>
+              <p className="text-[11px] text-slate-400 mt-1">{PIN_HINT}。本人に伝えてください</p>
             </div>
           </div>
+
+          <p className="mt-3 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+            この人は<b className="text-slate-700">全店舗</b>のシフト・スタッフ・設定を扱えるようになり、
+            さらに<b className="text-slate-700">別の本部管理者を追加できる</b>ようになります。
+          </p>
+
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <SelfSecretField
+              value={addSecret} onChange={setAddSecret}
+              isDeveloper={isDeveloper} onEnter={handleAdd}
+            />
+          </div>
+
           <div className="flex gap-2 mt-4">
             <button
               onClick={handleAdd} disabled={busyId === 'new'}
@@ -131,7 +205,7 @@ export default function HqAdminsPage() {
               {busyId === 'new' ? '追加中…' : '追加する'}
             </button>
             <button
-              onClick={() => { setShowAdd(false); setError(''); }}
+              onClick={() => { setShowAdd(false); setAddSecret(''); setError(''); }}
               className="px-3 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm hover:bg-slate-50"
             >
               やめる
@@ -166,6 +240,17 @@ export default function HqAdminsPage() {
                       />
                     </div>
                   </div>
+
+                  {/* PINを変えるときだけ本人確認を求める。名前だけの変更は取り返しがつく */}
+                  {editPin && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <SelfSecretField
+                        value={editSecret} onChange={setEditSecret}
+                        isDeveloper={isDeveloper} onEnter={() => handleSave(a.id)}
+                      />
+                    </div>
+                  )}
+
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleSave(a.id)} disabled={busyId === a.id}
@@ -174,7 +259,7 @@ export default function HqAdminsPage() {
                       {busyId === a.id ? '保存中…' : '保存する'}
                     </button>
                     <button
-                      onClick={() => { setEditId(null); setError(''); }}
+                      onClick={() => { setEditId(null); setEditSecret(''); setError(''); }}
                       className="px-3 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm hover:bg-slate-50"
                     >
                       やめる
@@ -201,7 +286,7 @@ export default function HqAdminsPage() {
                   </div>
                   <button onClick={() => openEdit(a)} className="text-sm text-blue-600 hover:text-blue-700">編集</button>
                   <button
-                    onClick={() => { setConfirmDelete(a); setError(''); }}
+                    onClick={() => { setConfirmDelete(a); setDeleteSecret(''); setError(''); }}
                     disabled={a.id === selfId || admins.length <= 1}
                     title={
                       a.id === selfId ? '自分自身は削除できません'
@@ -219,7 +304,13 @@ export default function HqAdminsPage() {
                   <p className="text-xs text-red-800 leading-relaxed">
                     <b>{a.name} を削除しますか？</b> この人は本部管理画面に入れなくなります。元に戻せません。
                   </p>
-                  <div className="flex gap-2 mt-2">
+                  <div className="mt-2.5">
+                    <SelfSecretField
+                      value={deleteSecret} onChange={setDeleteSecret}
+                      isDeveloper={isDeveloper} onEnter={() => handleDelete(a.id)}
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleDelete(a.id)} disabled={busyId === a.id}
                       className="px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-40"
@@ -227,7 +318,7 @@ export default function HqAdminsPage() {
                       {busyId === a.id ? '削除中…' : '削除する'}
                     </button>
                     <button
-                      onClick={() => setConfirmDelete(null)}
+                      onClick={() => { setConfirmDelete(null); setDeleteSecret(''); }}
                       className="px-2.5 py-1 rounded-md border border-slate-300 text-slate-600 text-xs hover:bg-white"
                     >
                       やめる
@@ -244,6 +335,14 @@ export default function HqAdminsPage() {
         <p className="mt-3 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-2.5 leading-relaxed">
           <b>本部管理者が1人だけです。</b>
           この人が使えなくなると、店舗の追加も権限の発行もできなくなります。もう1人追加しておくことをおすすめします。
+        </p>
+      )}
+
+      {!loading && admins.length >= MANY_ADMINS && (
+        <p className="mt-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 leading-relaxed">
+          <b>本部管理者が{admins.length}人います。</b>
+          全店舗のデータを扱える権限です。覚えのない名前が混じっていないか、ときどき確認してください。
+          追加・削除はすべて「操作の記録」に残っています。
         </p>
       )}
     </div>

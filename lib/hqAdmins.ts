@@ -7,7 +7,10 @@
  * UIから起こせないように2つの歯止めを置く。
  *
  * 判定はAPIの内側で行うが、条件だけをここに出してテストできるようにしている。
+ * ここはDBにもenvにも触れない純粋な判定だけに保つこと（テストを軽く保つため）。
  */
+
+import type { UserRole } from './types';
 
 export type HqAdminGuardResult = { ok: true } | { ok: false; reason: string };
 
@@ -59,6 +62,23 @@ export function validateHqAdminInput(name: string, pin: string, pinRequired: boo
   if (trimmed.length > 20) return { ok: false, reason: '名前は20文字以内で入力してください' };
   if (pinRequired || pin) {
     if (!HQ_PIN_PATTERN.test(pin)) return { ok: false, reason: 'PINは数字4桁で入力してください' };
+  }
+  return { ok: true };
+}
+
+/**
+ * 再認証で入力してもらう「自分の合言葉」の形式チェック。
+ *
+ * developer はDBに行が無く、ログインにも4桁PINではなく DEV_LOGIN_PASSWORD を
+ * 使う合成ロールなので、桁数の条件を分ける（照合の実体は lib/reauth.ts）。
+ */
+export function validateSelfSecret(role: UserRole, secret: string): HqAdminGuardResult {
+  if (role === 'developer') {
+    if (!secret) return { ok: false, reason: '確認のため、開発者パスワードを入力してください' };
+    return { ok: true };
+  }
+  if (!HQ_PIN_PATTERN.test(secret)) {
+    return { ok: false, reason: '確認のため、あなたのPINを数字4桁で入力してください' };
   }
   return { ok: true };
 }

@@ -3,6 +3,7 @@ import { requireHqAdmin } from '@/lib/sessionGuard';
 import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { canDeleteHqAdmin, validateHqAdminInput } from '@/lib/hqAdmins';
+import { verifySelfSecret } from '@/lib/reauth';
 
 // 本部管理者アカウントの管理。
 //
@@ -13,6 +14,10 @@ import { canDeleteHqAdmin, validateHqAdminInput } from '@/lib/hqAdmins';
 //
 // ★本部管理者を空にすると誰も本部管理画面に入れなくなる。
 //   歯止めの条件は lib/hqAdmins.ts に切り出してテストしてある。
+//
+// ★権限が増える操作（追加・削除・PINの再発行）は、操作の直前に
+//   自分の合言葉をもう一度求める（lib/reauth.ts）。理由はそちらの冒頭に書いた。
+//   名前の変更だけは取り返しがつくので対象外にしている。
 
 interface HqAdminRow { id: string; name: string; created_at: string }
 
@@ -22,6 +27,8 @@ function parsePayload(body: unknown) {
     id: typeof b?.id === 'string' ? b.id : '',
     name: typeof b?.name === 'string' ? b.name.trim() : '',
     pin: typeof b?.pin === 'string' ? b.pin : '',
+    // 再認証で入力し直した「操作している本人」の合言葉。追加する相手の pin とは別物
+    secret: typeof b?.secret === 'string' ? b.secret : '',
   };
 }
 
@@ -45,16 +52,27 @@ export async function GET() {
     .order('created_at', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  return NextResponse.json({ admins: (data ?? []) as HqAdminRow[], selfId: session.id });
+  // selfRole は再認証の入力欄の出し分けに使う（developer だけ4桁PINではなく
+  // 開発者パスワードを入力する）。クライアント側の推測ではなくサーバーの判定を渡す
+  return NextResponse.json({
+    admins: (data ?? []) as HqAdminRow[],
+    selfId: session.id,
+    selfRole: session.role,
+  });
 }
 
 export async function POST(request: Request) {
   const session = await requireHqAdmin();
   if (session instanceof NextResponse) return session;
 
-  const { name, pin } = parsePayload(await request.json().catch(() => null));
+  const { name, pin, secret } = parsePayload(await request.json().catch(() => null));
+  // 入力の不備を先に返す。合言葉の照合はDBの失敗回数を1つ消費するため、
+  // 名前の打ち間違いのような取り返しのつく誤りで消費させない
   const valid = validateHqAdminInput(name, pin, true);
   if (!valid.ok) return NextResponse.json({ error: valid.reason }, { status: 400 });
+
+  const reauth = await verifySelfSecret(session, secret);
+  if (!reauth.ok) return NextResponse.json({ error: reauth.reason }, { status: reauth.status });
 
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -88,7 +106,7 @@ export async function PATCH(request: Request) {
   const session = await requireHqAdmin();
   if (session instanceof NextResponse) return session;
 
-  const { id, name, pin } = parsePayload(await request.json().catch(() => null));
+  const { id, name, pin, secret } = parsePayload(await request.json().catch(() => null));
   if (!id) return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
   const valid = validateHqAdminInput(name, pin, false);
   if (!valid.ok) return NextResponse.json({ error: valid.reason }, { status: 400 });
@@ -105,6 +123,13 @@ export async function PATCH(request: Request) {
   if (!existing) return NextResponse.json({ error: '対象が見つかりません' }, { status: 404 });
   if (existing.role !== 'hq_admin') {
     return NextResponse.json({ error: 'この画面で変更できるのは本部管理者だけです' }, { status: 400 });
+  }
+
+  // PINの再発行は「その人になりすませる値を自分で決める」操作なので、追加・削除と同じ扱いにする。
+  // 名前の変更だけなら求めない
+  if (pin) {
+    const reauth = await verifySelfSecret(session, secret);
+    if (!reauth.ok) return NextResponse.json({ error: reauth.reason }, { status: reauth.status });
   }
 
   const { error } = await admin.from('users').update({ name }).eq('id', id);
@@ -139,7 +164,7 @@ export async function DELETE(request: Request) {
   const session = await requireHqAdmin();
   if (session instanceof NextResponse) return session;
 
-  const { id } = parsePayload(await request.json().catch(() => null));
+  const { id, secret } = parsePayload(await request.json().catch(() => null));
   if (!id) return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
 
   const admin = createAdminClient();
@@ -154,8 +179,12 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'この画面で削除できるのは本部管理者だけです' }, { status: 400 });
   }
 
+  // そもそも削除できない相手なら、合言葉を求める前に断る
   const guard = canDeleteHqAdmin(id, session.id, await countHqAdmins(admin));
   if (!guard.ok) return NextResponse.json({ error: guard.reason }, { status: 400 });
+
+  const reauth = await verifySelfSecret(session, secret);
+  if (!reauth.ok) return NextResponse.json({ error: reauth.reason }, { status: reauth.status });
 
   const { error } = await admin.from('users').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
