@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Feedback, FeedbackStatus } from '@/lib/types';
 import EmptyState from '@/components/EmptyState';
+import { notifyFeedbackChanged } from '@/lib/feedbackEvents';
 
 // 本部管理者だけが見る、「開発者へ」宛ての要望の受信箱（全店舗横断）。
 //
@@ -76,6 +77,7 @@ export default function HqFeedbackPage() {
       setError(data?.error ?? '削除に失敗しました');
       return;
     }
+    notifyFeedbackChanged();
     fetchData();
   };
 
@@ -93,6 +95,7 @@ export default function HqFeedbackPage() {
       setError(data?.error ?? '更新に失敗しました');
       return;
     }
+    notifyFeedbackChanged();
     fetchData();
   };
 

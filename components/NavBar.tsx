@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { onFeedbackChanged } from '@/lib/feedbackEvents';
 import { canAccessAdmin } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 import AppMenu from '@/components/AppMenu';
@@ -122,7 +123,10 @@ export default function NavBar() {
     const channel = supabase.channel(`navbar-feedback-${storeId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `store_id=eq.${storeId}` }, fetchFeedbackUnreadCount)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // 「対応済みにする」は管理キーで更新するためRealtimeに乗らない。
+    // 同じタブ内の更新は要望画面からの合図で数え直す
+    const off = onFeedbackChanged(fetchFeedbackUnreadCount);
+    return () => { supabase.removeChannel(channel); off(); };
   }, [user, storeId]);
 
   const navItems = (user && canAccessAdmin(user.role)) ? adminNav : staffNav as typeof adminNav;

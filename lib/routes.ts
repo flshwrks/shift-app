@@ -9,6 +9,7 @@ export const HQ_HOME = '/admin/stores';
 export const HQ_LOGIN = '/admin/login';
 export const HQ_FEEDBACK = '/admin/feedback';
 export const HQ_ERRORS = '/admin/errors';
+export const HQ_ADMINS = '/admin/admins';
 
 // アプリ外にある「使い方の完全版」。役割ごとの手順を画面の図つきで載せた読み物で、
 // アプリ内ヘルプ（HelpModal）に入りきらない粒度をこちらが受け持つ。

@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import type { Feedback, FeedbackStatus } from '@/lib/types';
 import EmptyState from '@/components/EmptyState';
 import BackToSettings from '@/components/BackToSettings';
+import { notifyFeedbackChanged } from '@/lib/feedbackEvents';
 
 type Tab = 'open' | 'done';
 
@@ -81,6 +82,7 @@ export default function AdminFeedbackPage() {
       setError(data?.error ?? '削除に失敗しました');
       return;
     }
+    notifyFeedbackChanged();
     fetchData();
   };
 
@@ -98,6 +100,7 @@ export default function AdminFeedbackPage() {
       setError(data?.error ?? '更新に失敗しました');
       return;
     }
+    notifyFeedbackChanged();
     fetchData();
   };
 

@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { HQ_HOME, HQ_FEEDBACK, HQ_ERRORS } from '@/lib/routes';
+import { onFeedbackChanged } from '@/lib/feedbackEvents';
+import { HQ_HOME, HQ_FEEDBACK, HQ_ERRORS, HQ_ADMINS } from '@/lib/routes';
 
 // 本部管理エリアのナビ。店舗エリアのNavBarと違い項目が少ないので、
 // ボトムナビは置かず、ヘッダー直下の横並びタブにとどめる。
@@ -27,7 +28,10 @@ export default function HqNav() {
     const channel = supabase.channel('hq-nav-feedback')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, fetchCount)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // 「対応済みにする」は管理キーで更新するためRealtimeに乗らない。
+    // 同じタブ内の更新は要望画面からの合図で数え直す
+    const off = onFeedbackChanged(fetchCount);
+    return () => { supabase.removeChannel(channel); off(); };
   }, []);
 
   // エラーは自前で記録しており即時通知の手段が無いため、このバッジが気づく唯一の入口になる。
@@ -44,6 +48,7 @@ export default function HqNav() {
     { href: HQ_HOME, label: '店舗一覧', badge: 0 },
     { href: HQ_FEEDBACK, label: '要望', badge: openFeedbackCount },
     { href: HQ_ERRORS, label: 'エラー', badge: openErrorCount },
+    { href: HQ_ADMINS, label: '本部管理者', badge: 0 },
   ];
 
   return (

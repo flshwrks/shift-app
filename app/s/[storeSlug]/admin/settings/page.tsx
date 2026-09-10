@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { onFeedbackChanged } from '@/lib/feedbackEvents';
 import { useStore, useShiftPatterns } from '@/lib/store';
 import { formatYM } from '@/lib/shifts';
 import { IconTrendingUp, IconClipboard, IconMessageSquare, IconChevronRight, IconHistory } from '@/components/icons';
@@ -46,7 +47,10 @@ export default function AdminSettingsPage() {
     const channel = supabase.channel(`settings-feedback-${storeId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback', filter: `store_id=eq.${storeId}` }, fetchCount)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // 「対応済みにする」は管理キーで更新するためRealtimeに乗らない。
+    // 同じタブ内の更新は要望画面からの合図で数え直す
+    const off = onFeedbackChanged(fetchCount);
+    return () => { supabase.removeChannel(channel); off(); };
   }, [storeId]);
 
   useEffect(() => {

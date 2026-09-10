@@ -185,6 +185,7 @@ const CAN_DO: { label: string; staff: boolean; admin: boolean; hq: boolean }[] =
   { label: '要望を送る',                 staff: true,  admin: false, hq: false },
   { label: '店舗を追加・編集・削除',     staff: false, admin: false, hq: true  },
   { label: 'エラーの記録を見る',         staff: false, admin: false, hq: true  },
+  { label: '本部管理者を追加・削除',     staff: false, admin: false, hq: true  },
 ];
 
 const ROLE_LABEL: Record<RoleId, string> = {
