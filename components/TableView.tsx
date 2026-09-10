@@ -55,7 +55,7 @@ function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v:
       onClick={() => onChange && setEditing(true)}
       className={`text-[10px] break-words whitespace-pre-wrap leading-relaxed px-1 ${
         expanded ? '' : 'line-clamp-2'
-      } ${value ? 'text-slate-600' : 'text-slate-300'} ${onChange ? 'cursor-text' : ''}`}
+      } ${value ? 'text-slate-600' : 'text-slate-500'} ${onChange ? 'cursor-text' : ''}`}
     >
       {value || (onChange ? 'メモ' : '')}
     </div>
@@ -176,7 +176,7 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
               </td>
               {isAdmin && (
                 <td className="px-3 py-2.5 border-r border-slate-200 text-center whitespace-nowrap">
-                  <span className={`text-xs font-semibold tabular-nums ${totalMin > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                  <span className={`text-xs font-semibold tabular-nums ${totalMin > 0 ? 'text-blue-600' : 'text-slate-500'}`}>
                     {formatTotalHours(totalMin)}
                   </span>
                 </td>
@@ -227,7 +227,7 @@ const TableView = forwardRef<HTMLDivElement, Props>(function TableView({ year, m
                       </div>
                     ) : (
                       isAdmin && onCellClick ? (
-                        <span className="text-slate-300 opacity-0 group-hover:opacity-100">＋</span>
+                        <span className="text-slate-500 opacity-0 group-hover:opacity-100">＋</span>
                       ) : null
                     )}
                   </td>

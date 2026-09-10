@@ -99,6 +99,22 @@ export default function FeedbackModal({ onClose }: Props) {
                   ? 'お店の管理者に届きます'
                   : 'アプリの改善要望として開発者に届きます'}
               </p>
+              {/* 「開発者へ」の送り先はお店の外（アプリを作っている人）。書いた内容が
+                  そのまま外に出ることを、送る前に本人が知っている状態にする。
+                  送信先の設定（GITHUB_FEEDBACK_REPO）が公開リポジトリだと、
+                  本文はインターネット上の誰でも読める場所に恒久的に残る。
+                  設定側の対策と両輪で、ここでも明示する（docs/SECURITY.md SEC-3） */}
+              {destination === 'dev' && (
+                <p className="mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                  <b>この内容はお店の外（開発者）に、書いたまま届きます。</b>
+                  <br />
+                  同僚の名前・お客様とのやりとり・欠勤の理由などは書かないでください。
+                  <br />
+                  <span className="text-amber-800">
+                    お店に関わることは「管理者へ」を選んでください。
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* 種別 */}

@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { canDeleteHqAdmin, canDemoteHqAdmin, validateHqAdminInput, validateSelfSecret } from '../lib/hqAdmins';
+import { canDeleteHqAdmin, canDemoteHqAdmin, validateHqAdminInput, validateSelfSecret, isStoreScopedTarget } from '../lib/hqAdmins';
 
 describe('本部管理者の削除', () => {
   test('他の人が2人以上いれば削除できる', () => {
@@ -102,5 +102,24 @@ describe('再認証の入力チェック', () => {
     assert.match(hq.ok === false ? hq.reason : '', /あなたのPIN/);
     const dev = validateSelfSecret('developer', '');
     assert.match(dev.ok === false ? dev.reason : '', /開発者パスワード/);
+  });
+});
+
+// 店舗スタッフ管理API（/api/admin/users）が本部管理者を操作できてしまった穴（SEC-1）の再発防止。
+// 判定は1行だが、抜けても画面上は何も壊れないので、ここで固定しておく
+describe('店舗スタッフ管理APIの操作対象', () => {
+  test('店舗に属するロールは操作してよい', () => {
+    assert.equal(isStoreScopedTarget('staff'), true);
+    assert.equal(isStoreScopedTarget('admin'), true);
+  });
+
+  test('本部管理者は操作させない（/api/hq/admins 側の歯止めを素通りさせないため）', () => {
+    assert.equal(isStoreScopedTarget('hq_admin'), false);
+  });
+
+  test('未知のロールが増えても、hq_admin 以外は通す既定でよい', () => {
+    // developer はDBに保存されないので users 行の role に現れない
+    assert.equal(isStoreScopedTarget('developer'), true);
+    assert.equal(isStoreScopedTarget(''), true);
   });
 });

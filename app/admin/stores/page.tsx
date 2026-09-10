@@ -271,8 +271,11 @@ export default function AdminStoresPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
             <h3 className="text-lg font-semibold tracking-tight text-slate-900 mb-2">店舗を削除</h3>
-            <p className="text-slate-600 text-sm mb-6">
+            <p className="text-slate-600 text-sm mb-3">
               <span className="font-semibold">{deleteTarget.name}</span> を削除します。この操作は取り消せません。
+            </p>
+            <p className="text-slate-600 text-sm mb-6">
+              スタッフが1人でも残っている店舗は削除できません。先にスタッフを削除してください。
             </p>
             {deleteError && <p className="text-red-500 text-sm mb-3">{deleteError}</p>}
             <div className="flex gap-2">

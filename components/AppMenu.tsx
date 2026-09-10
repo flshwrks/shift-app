@@ -121,12 +121,18 @@ export default function AppMenu() {
           </Link>
         </div>
 
-        <div className="py-1 border-t border-slate-100">
-          {showBackToHq && (
-            <Link href={HQ_HOME} onClick={() => setOpen(false)} className={itemClass}>
+        {showBackToHq && (
+          <div className="py-1 border-t border-slate-100">
+            <Link href={HQ_HOME} onClick={() => setOpen(false)} className={`${itemClass} text-ai-600 font-medium`}>
               本部管理へ戻る
             </Link>
-          )}
+          </div>
+        )}
+
+        {/* ログアウトは「本部管理へ戻る」と隣接させない。
+            本部管理者は店舗↔本部を頻繁に往復するため、隣にあると誤タップで
+            PINの入れ直しになる。もう1段階の区切り（border-t）を挟んで離す */}
+        <div className="py-1 border-t border-slate-100">
           <button onClick={handleLogout} className={`${itemClass} text-slate-500`}>
             ログアウト
           </button>

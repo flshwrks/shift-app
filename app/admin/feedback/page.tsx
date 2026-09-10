@@ -36,6 +36,7 @@ export default function HqFeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [patchingId, setPatchingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     const { data, error: fetchError } = await supabase
@@ -61,9 +62,8 @@ export default function HqFeedbackPage() {
   const doneItems = items.filter(i => i.status === 'done');
   const displayed = tab === 'open' ? openItems : doneItems;
 
-  // 対応済みのものだけ削除できる。元に戻せないので確認を挟む
+  // 対応済みのものだけ削除できる。元に戻せないので確認モーダルを挟む
   const handleDelete = async (id: string) => {
-    if (!window.confirm('この要望を削除します。元に戻せません。よろしいですか？')) return;
     setError('');
     setPatchingId(id);
     const res = await fetch('/api/feedback', {
@@ -77,6 +77,7 @@ export default function HqFeedbackPage() {
       setError(data?.error ?? '削除に失敗しました');
       return;
     }
+    setDeleteTarget(null);
     notifyFeedbackChanged();
     fetchData();
   };
@@ -191,7 +192,7 @@ export default function HqFeedbackPage() {
                 {item.status === 'done' ? (
                   <>
                     <button
-                      onClick={() => handleDelete(item.id)}
+                      onClick={() => { setError(''); setDeleteTarget(item.id); }}
                       disabled={patchingId === item.id}
                       className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
                     >
@@ -218,6 +219,29 @@ export default function HqFeedbackPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 削除確認モーダル（app/admin/stores/page.tsx の削除確認モーダルと同じ構造） */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold tracking-tight text-slate-900 mb-2">要望を削除</h3>
+            <p className="text-slate-600 text-sm mb-6">
+              この要望を削除します。元に戻せません。
+            </p>
+            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => handleDelete(deleteTarget)}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700">
+                削除する
+              </button>
+              <button onClick={() => setDeleteTarget(null)}
+                className="flex-1 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg hover:bg-slate-50">
+                キャンセル
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

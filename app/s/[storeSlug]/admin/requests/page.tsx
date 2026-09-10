@@ -221,7 +221,7 @@ export default function AdminRequestsPage() {
                   </div>
                   <button
                     onClick={() => startCancel(req)}
-                    className="text-xs px-2.5 py-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 flex-shrink-0 transition-colors"
+                    className="text-xs px-2.5 py-1.5 text-slate-500 hover:text-red-500 rounded-lg hover:bg-red-50 flex-shrink-0 transition-colors"
                   >
                     取消
                   </button>

@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/sessionGuard';
 import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import { isHqRole, type SessionUser } from '@/lib/types';
+import { isStoreScopedTarget } from '@/lib/hqAdmins';
 
 const PIN_PATTERN = /^\d{4}$/;
 
@@ -16,6 +17,19 @@ function parseUserPayload(body: unknown) {
     storeId: typeof b?.storeId === 'string' ? b.storeId : '',
   };
 }
+
+// このAPIは**店舗に属する人（admin/staff）専用**。本部管理者（hq_admin）は
+// 店舗に属さないため、`/api/hq/admins` でしか操作できないようにする。
+//
+// ★2026-09-11の点検(SEC-1)で見つかった穴★
+//   店舗境界の検査は「hqロールなら省略」する作りになっていたため、本部管理者と
+//   開発者はこの経路から**任意のIDを指定して他の本部管理者を削除・降格できた**。
+//   前日に /api/hq/admins へ入れた歯止め（再認証・自分は消せない・最後の1人は
+//   消せない）を、古いこの入口から素通りできる状態だった。
+//   店舗境界の検査を省くことと、**操作対象の種類を絞らない**ことは別の話で、
+//   後者が抜けていた。対象が hq_admin なら、呼び出し元の権限によらず断る。
+const HQ_TARGET_REJECTED =
+  '本部管理者はこの画面からは変更できません。本部管理の「本部管理者」から操作してください';
 
 // createAdminClient() はRLSを完全にバイパスするため、「店舗管理者は自店しか
 // 操作できない」という保証はここでのチェックにしか存在しない。
@@ -105,6 +119,13 @@ export async function PATCH(request: Request) {
     .maybeSingle<{ store_id: string | null; name: string; role: string }>();
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 400 });
   if (!existing) return NextResponse.json({ error: 'invalid_request' }, { status: 400 });
+  // 対象が本部管理者なら、呼び出し元が誰であっても断る（SEC-1）。
+  // ここを通すと role が 'admin' に書き換わり、store_id が null のままの壊れた行になる。
+  // finalizeSession() がそれを無効セッションとして扱うため対象は恒久的にログイン不能になり、
+  // /api/hq/admins は role !== 'hq_admin' を弾くので画面からは元に戻せない
+  if (!isStoreScopedTarget(existing.role)) {
+    return NextResponse.json({ error: HQ_TARGET_REJECTED }, { status: 403 });
+  }
   if (!isHqRole(session.role) && existing.store_id !== session.storeId) {
     return NextResponse.json({ error: '権限がありません' }, { status: 403 });
   }
@@ -142,9 +163,20 @@ export async function DELETE(request: Request) {
   const admin = createAdminClient();
 
   // service_roleはRLSを見ないため、削除範囲をこのコードで絞る。
-  // DELETEはPATCHと違いPIN設定を伴わないので、事前SELECTで確認してから消すのではなく
-  // 条件付きDELETE1回で済ませられる（reorderと同じ方式）。他店の行を指定しても
-  // 該当0件になるだけで、存在の有無すら相手に漏れない。
+  //
+  // 以前は条件付きDELETE1回で済ませていたが、それだと「対象が本部管理者かどうか」を
+  // 消す前に判定できなかった（SEC-1）。1往復増えるが、先に対象を確認してから消す。
+  const { data: target, error: targetError } = await admin
+    .from('users')
+    .select('role')
+    .eq('id', id)
+    .maybeSingle<{ role: string }>();
+  if (targetError) return NextResponse.json({ error: targetError.message }, { status: 400 });
+  // 存在しないIDと権限外のIDは同じ応答にする（存在の有無を相手に漏らさない）
+  if (target && !isStoreScopedTarget(target.role)) {
+    return NextResponse.json({ error: HQ_TARGET_REJECTED }, { status: 403 });
+  }
+
   const query = admin.from('users').delete().eq('id', id);
   // 削除後は氏名を引けないため、消える行から name/store_id を受け取っておく
   const { data: deleted, error } = await (

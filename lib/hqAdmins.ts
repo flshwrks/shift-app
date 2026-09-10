@@ -82,3 +82,20 @@ export function validateSelfSecret(role: UserRole, secret: string): HqAdminGuard
   }
   return { ok: true };
 }
+
+/**
+ * 店舗スタッフ管理API（`/api/admin/users`）で操作してよい対象かどうか。
+ *
+ * あのAPIは「店舗に属する人」を扱う入口で、店舗境界の検査を hqロールに対しては
+ * 省略する。省略してよいのは**店舗をまたげる**という意味であって、
+ * **本部管理者そのものを操作してよい**という意味ではない。
+ * 2026-09-11の点検(SEC-1)まで両者が混ざっており、本部管理者が古いこの入口から
+ * 他の本部管理者を削除・降格でき、`/api/hq/admins` 側の歯止め
+ * （再認証・自分は消せない・最後の1人は消せない）を素通りできた。
+ *
+ * 判定自体は1行だが、**抜けても画面上は何も壊れない**種類の不変条件なので、
+ * ここに出してテストで固定する。
+ */
+export function isStoreScopedTarget(targetRole: string): boolean {
+  return targetRole !== 'hq_admin';
+}

@@ -222,22 +222,26 @@ font-synthesis: none;           /* 合成太字を禁止（太字の前後で行
 
 ## 5. コンポーネントパターン
 
-**まず `components/UI.tsx` と `components/Ledger.tsx` を見ること。**
-画面側でクラス文字列を手書きしない。無ければ**キットに足す**（画面に一度きりの見た目を作らない）。
+**まだ共通化されていない。** 各画面がクラス文字列をそのつど手書きしており、
+次の3つは実際にばらついている。共通化するなら、まずこの3つから手を付ける。
 
-| 部品 | 置き場所 |
-|---|---|
-| `Button` / `buttonClass` / `TextLink` / `QtyInput` / `Field` / `Segmented` | `components/UI.tsx` |
-| `Modal` / `BottomSheet` / `ConfirmDialog` / `StickyBar` / `Section` / `PageTitle` | `components/UI.tsx` |
-| `Bleed` / `FilterBar` / `LedgerHead` / `LedgerGroup` / `LedgerList` / `LedgerBand` / `LedgerEmpty` | `components/Ledger.tsx` |
-| `LevelTick` / `Figure` / `Shortfall` / `StockRow` | `components/Ledger.tsx` |
-| `Badge` / `EmptyState` / `ErrorBanner` / `InfoBanner` / `WarnBanner` / `LoadingText` | `components/Feedback.tsx` |
+- **「確定」ボタンが4通り**: `components/TableView.tsx:219`（青枠チップ）／
+  `components/TimelineView.tsx:310-317`（半透明の白）／
+  `components/ShiftDetailModal.tsx:90-96`（緑塗り）／
+  `app/s/[storeSlug]/admin/schedule/page.tsx:378-383`（緑塗り）
+- **削除確認モーダルが画面ごとの手書き**（`app/admin/stores/page.tsx` を手本に
+  `app/admin/feedback/page.tsx` と `app/s/[storeSlug]/admin/feedback/page.tsx` の
+  2箇所を同じ構造に揃えたが、共通部品にはなっていない）
+- **空状態**: `components/EmptyState.tsx` は実在するが使用は4画面のみ。
+  `app/s/[storeSlug]/admin/staff/page.tsx:201` はアイコンなしの素のテキストで
+  揃っていない
 
-> **「この画面だけ特別だから手で組む」は、ほぼ必ず2画面目が現れる。**
-> 実際に入庫と出庫が同じ確定ボタンを別々に持ち、同じ「この画面だけ」というコメントまで
-> 揃っていた。1画面目で気づいたらキット側を広げる。
-
-以下は各部品が内部で使っている組み合わせ（キットを直すときの参照用）。
+> かつてこの節は `components/UI.tsx` / `Ledger.tsx` / `Feedback.tsx` に
+> `Button` / `Modal` / `ConfirmDialog` / `EmptyState` / `Badge` / `buttonClass` /
+> `StickyBar` などが揃っている前提で書かれていたが、**`EmptyState.tsx` 以外は
+> 一度も作られていなかった**（2026-09に発覚）。存在しないファイル名を、あるかの
+> ように書かないこと。以下は「まだキットが無い」前提で、実際に画面が手書きして
+> いる値をそのまま参照用に載せている。
 
 **罫線セクション**（カードの代わり）
 ```
@@ -253,7 +257,7 @@ flex items-stretch border-b border-rule
   → 本文 pl-3 pr-3 py-2
 ```
 
-**ボタン**（`Button` / `buttonClass`）
+**ボタン**（共通化する場合の目標値。現状は画面ごとに同じクラス文字列を手で複製している）
 - 主: `bg-ai-600 text-white rounded-[3px] font-bold` ─ **有彩色にすること**
 - 副: `bg-sheet border border-rule-2 text-ink rounded-[3px]`
 - 破壊: `bg-sheet border border-alert-600 text-alert-600 rounded-[3px]`
@@ -261,11 +265,10 @@ flex items-stretch border-b border-rule
 
 サイズは `sm`(h-8) / `md`(h-10) / `lg`(h-12) / **`xl`(h-14)**。
 `xl` は記録画面の確定ボタン専用（片手・厨房で押すため・§2.9）。
-`success` を渡すと `bg-ok-600` になる。**位置も大きさも変えずに色だけで結果を伝える**
+成功時は位置も大きさも変えず `bg-ok-600` に差し替えて結果を伝える
 （ボタンが動くと、押した直後に次の操作を見失う）。
 
-`<Link>` をボタンに見せたいときは `buttonClass({ variant, size })` を使う。
-画面ごとに同じクラス文字列を再宣言しない。
+`<Link>` をボタンに見せたい画面も、上と同じクラス文字列を手で複製している（共通化の候補）。
 
 > 主ボタンをモノクロ（墨）にする案は却下した。コントラスト比は最高（17.4:1）だが、
 > **周囲の文字と同じ色なので前意識では拾えず、読んで探すことになる。**
@@ -280,7 +283,6 @@ focus:outline-none focus:border-ai-600 focus:ring-1 focus:ring-ai-600
 スマホでフォーカス時にズームしないよう **16px を下回らせない**（`.no-zoom-input`）。
 `.no-zoom-input` は `@layer base` に置いてある。素で書くと Tailwind のユーティリティと
 同じ扱いになり、`text-[26px]` のような指定に競り勝ってしまうため。
-数量欄は `QtyInput`（`fontPx` を渡す）を使い、この事情を画面側に持ち込まない。
 
 **モーダル**（スマホはボトムシート、デスクトップは中央）
 ```
@@ -288,12 +290,12 @@ fixed inset-0 bg-ink/40 flex items-end sm:items-center justify-center z-50 p-4
 → 中身: bg-sheet rounded-t-lg sm:rounded-[4px] sm:max-w-lg shadow-xl
 ```
 
-**固定フッター**（`StickyBar`）
+**固定フッター**
 ```
 fixed bottom-14 sm:bottom-0 left-0 right-0 p-3 bg-sheet/95 backdrop-blur border-t border-rule-2
 ```
-`StickyBar` は**同じ高さのスペーサーを自分で出す**。呼び出し側に `pb-40` を対で
-書かせる約束にしていたが、条件付きで出し分ける画面では必ず片方が抜ける。
+呼び出し側で同じ高さのスペーサー（`pb-40` 等）を対で書く必要がある。条件付きで
+出し分ける画面では片方が抜けやすいので注意する（共通化して自動化したい箇所）。
 
 **トーストは作らない。** フィードバックはインラインの帯＋ボタンのラベル遷移で表す。
 **破壊的操作は必ず確認ダイアログを挟む**（`window.confirm` は使わない）。

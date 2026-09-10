@@ -537,7 +537,7 @@ export default function ShiftsPage() {
                     {!s.dirty && s.status === 'confirmed' && <span className="text-[10px] px-1.5 py-px rounded font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">確定</span>}
                   </div>
                 ) : (
-                  <span className="text-sm text-slate-300">—</span>
+                  <span className="text-sm text-slate-500">—</span>
                 )}
                 {s.comment && <p className="text-xs text-slate-400 mt-0.5 truncate">{s.comment}</p>}
               </div>
