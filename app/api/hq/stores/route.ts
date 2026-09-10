@@ -3,7 +3,7 @@ import { requireHqAdmin } from '@/lib/sessionGuard';
 import { recordAudit } from '@/lib/audit';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 import type { Store } from '@/lib/types';
-import { SLUG_PATTERN, SLUG_ERROR, MAX_BASE_LENGTH, withRandomSuffix } from '@/lib/storeSlug';
+import { SLUG_PATTERN, SLUG_ERROR, MAX_BASE_LENGTH, withRandomSuffix, hasRandomSuffix } from '@/lib/storeSlug';
 
 function parseStorePayload(body: unknown) {
   const b = body as Record<string, unknown> | null;
@@ -66,12 +66,20 @@ export async function PATCH(request: Request) {
   if (!name) return NextResponse.json({ error: '店舗名を入力してください' }, { status: 400 });
   if (!SLUG_PATTERN.test(slug)) return NextResponse.json({ error: SLUG_ERROR }, { status: 400 });
 
+  // 公開シフト表がログイン不要で見られるため、店舗IDは推測できない値である必要がある（F-6）。
+  // 作成時(POST)は必ず接尾辞を付けているが、編集でそれを外せてしまうと対策に穴が開く。
+  // すでに接尾辞が付いている値はそのまま通す（毎回付けると umeda-k3f9q2-x8m2p1 と伸び続けるため）。
+  const finalSlug = hasRandomSuffix(slug) ? slug : withRandomSuffix(slug);
+  if (!hasRandomSuffix(slug) && slug.length > MAX_BASE_LENGTH) {
+    return NextResponse.json({ error: SLUG_ERROR }, { status: 400 });
+  }
+
   const admin = createAdminClient();
   // .select()を付けずにupdateすると、対象idが1件も無くてもerrorはnullのまま返ってくる
   // （0件更新は失敗ではなく「該当なし」として扱われるため）。存在しないidを指定した場合に
   // 「保存はできたが実際には何も変わっていない」という無言の失敗になるのを防ぐため、
   // 更新できた行を明示的に受け取って件数を確認する。
-  const { data, error } = await admin.from('stores').update({ slug, name }).eq('id', id).select('id');
+  const { data, error } = await admin.from('stores').update({ slug: finalSlug, name }).eq('id', id).select('id');
   if (error) {
     const message = error.message.includes('unique') ? 'この店舗IDは既に使用されています' : error.message;
     return NextResponse.json({ error: message }, { status: 400 });

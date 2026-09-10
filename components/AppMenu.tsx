@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { useStoreOptional } from '@/lib/store';
 import { isHqRole } from '@/lib/types';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
-import { HQ_HOME, HQ_LOGIN, storeLoginPath, FULL_GUIDE_PATH } from '@/lib/routes';
+import { HQ_HOME, HQ_LOGIN, storeLoginPath, fullGuidePath } from '@/lib/routes';
 import HelpModal from '@/components/HelpModal';
 import FeedbackModal from '@/components/FeedbackModal';
 import { IconMenu, IconHelp, IconHistory, IconMessageSquare, IconExternalLink } from '@/components/icons';
@@ -98,7 +98,7 @@ export default function AppMenu() {
           {/* アプリ内ヘルプの「もっと詳しく」。別タブで開くので、
               操作の途中でも今の画面を失わない */}
           <a
-            href={FULL_GUIDE_PATH}
+            href={fullGuidePath(user?.role)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setOpen(false)}

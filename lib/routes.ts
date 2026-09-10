@@ -18,6 +18,15 @@ export const HQ_ERRORS = '/admin/errors';
 // 管理まで引き継ぐことになるため。
 export const FULL_GUIDE_PATH = '/guide';
 
+// ログイン中の役割が分かっているときは、その役割のページへ直接飛ばす。
+// 役割を知っているのに読者に選ばせ直さないため。developer は本部と同じ画面を使う。
+export function fullGuidePath(role?: string | null): string {
+  if (role === 'staff') return '/guide/staff';
+  if (role === 'admin') return '/guide/admin';
+  if (role === 'hq_admin' || role === 'developer') return '/guide/hq';
+  return FULL_GUIDE_PATH;
+}
+
 export function storeLoginPath(storeSlug: string): string {
   return `/s/${storeSlug}/login`;
 }

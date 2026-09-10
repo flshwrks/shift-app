@@ -201,3 +201,24 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── 詳しい使い方（/guide）の印刷 ──────────────────────────
+   店舗で紙に出して掲示・研修に使うことがある。
+   ★最重要は details の中身を必ず出すこと。閉じたまま印刷すると
+     「よくある質問」が質問だけで答えの無い紙になる。
+   スコープを .guide-doc / .guide-no-print に限り、アプリ本体には影響させない。 */
+@media print {
+  @page { margin: 14mm 12mm; }
+
+  .guide-no-print { display: none !important; }
+
+  .guide-doc { max-width: none; font-size: 10.5pt; }
+  .guide-doc details > div { display: block !important; }
+  .guide-doc details, .guide-doc figure,
+  .guide-doc li, .guide-doc table, .guide-doc tr { break-inside: avoid; }
+  .guide-doc h1, .guide-doc h2, .guide-doc h3 { break-after: avoid; }
+  .guide-doc img { max-width: 62mm; height: auto; }
+  /* 内部リンクのURLは紙に出しても意味がない */
+  .guide-doc a[href^="/"]::after,
+  .guide-doc a[href^="#"]::after { content: ""; }
+}
