@@ -18,6 +18,10 @@ jobs:
       # 既知の脆弱性を含む依存のままデプロイされないようにする。
       # 本番に載る依存だけを見る（開発ツールの検知でCIを止めない）。
       - run: npm audit --omit=dev --audit-level=high
+      # このリポジトリは公開されている。配布用の文面・本番URL・実名が
+      # 混ざっていないかを検査する（2026-09-11、実際に約1か月流出した）。
+      # 一番手前に置く：他の検査より速く、落ちたら何より先に直すべきものだから
+      - run: npm run check:leak
       - run: npm run check:guide
       - run: npm test
       - run: npx tsc --noEmit

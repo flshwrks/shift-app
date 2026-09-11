@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession, SESSION_COOKIE, buildSessionCookieValue } from '@/lib/session';
-import { getVerifiedSession, SessionCheckUnavailable } from '@/lib/sessionGuard';
+import { getVerifiedSession, refreshStoreSlug, sessionCookieNeedsRefresh, SessionCheckUnavailable } from '@/lib/sessionGuard';
 import { signJwtForSession } from '@/lib/supabaseJwt';
 
 // クライアントはSupabase JWTをlocalStorageに保存しない（XSS対策）ため、
@@ -14,6 +14,9 @@ export async function GET() {
   let session;
   try {
     session = await getVerifiedSession();
+    // 店舗IDの改名に追随する。ここは45分に1回しか走らないので、
+    // 毎リクエストで引き直すより安い（lib/sessionGuard.ts の refreshStoreSlug 参照）
+    if (session) session = await refreshStoreSlug(session);
   } catch (e) {
     if (e instanceof SessionCheckUnavailable) {
       // DB障害と「セッションが無効」を混同させない。
@@ -35,10 +38,11 @@ export async function GET() {
   // 検証後のセッションも返す
   const res = NextResponse.json({ token, user: session });
 
-  // 権限や所属が変わっていた場合はCookieも貼り直す。
-  // 貼り直さないと、次のリクエストでまた古い権限のCookieが送られてくる
+  // 権限・所属店舗・店舗IDの文字列が変わっていた場合はCookieも貼り直す。
+  // 貼り直さないと、次のリクエストでまた古い内容のCookieが送られてくる。
+  // 比較条件は sessionCookieNeedsRefresh に出してテストで固定してある
   const raw = await getSession();
-  if (raw && (raw.role !== session.role || raw.storeId !== session.storeId)) {
+  if (raw && sessionCookieNeedsRefresh(raw, session)) {
     res.cookies.set(SESSION_COOKIE.name, buildSessionCookieValue(session), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

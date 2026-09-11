@@ -21,7 +21,7 @@ interface LoginUser {
 
 export default function LoginPage() {
   const { user, login, logout } = useAuth();
-  const { storeSlug, storeName } = useStore();
+  const { storeId, storeSlug, storeName } = useStore();
   const router = useRouter();
   const [users, setUsers] = useState<LoginUser[]>([]);
   const [selected, setSelected] = useState<LoginUser | null>(null);
@@ -34,10 +34,23 @@ export default function LoginPage() {
 
   // 自店のログイン画面に、その店舗の人がログイン済みで来た場合だけ素通しする。
   // （QRやブックマークからの再訪。毎回ログイン画面を挟むと煩わしい）
-  const isOwnStore = user != null && user.storeSlug === storeSlug;
+  //
+  // ★storeId でも照合する★
+  // 店舗IDを改名した直後は、Cookieの中の slug が古いままになりうる。
+  // slug だけで見ると**自分のアカウントなのに「別のアカウント」と判定**され、
+  // 混乱する画面が出る。storeId は改名しても変わらないので、こちらが一致すれば自店。
+  // （Cookie自体は /api/session/token が追いついた時点で直る）
+  const isOwnStore = user != null && (user.storeSlug === storeSlug || user.storeId === storeId);
 
   useEffect(() => {
     if (!user || !isOwnStore) return;
+    // ★Cookieの中の店舗IDが追いつくまで進まない★
+    // 改名直後はCookieが古いままのことがある。その状態で新URLへ進むと
+    // proxy.ts が「Cookieと違う」と見て**古いURLへ引き戻し**、
+    // そこはもう存在しないので行き止まりになる。
+    // /api/session/token が貼り直すと一致するので、それまでは
+    // 通常のログイン画面を出しておく（入り直しても直る）。
+    if (user.storeSlug !== storeSlug) return;
     router.replace(homePathFor(user.role, storeSlug));
   }, [user, isOwnStore, router, storeSlug]);
 

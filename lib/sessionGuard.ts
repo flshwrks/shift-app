@@ -111,6 +111,56 @@ export async function getVerifiedSession(): Promise<SessionUser | null> {
   return finalizeSession(session, result.role, result.storeId, storeSlug);
 }
 
+/**
+ * セッションが持つ店舗の**文字列ID（slug）**を、DBの現在値に合わせ直す。
+ *
+ * ★店舗IDの改名（F-6の残作業）で必要になる★
+ * `reconcileSession` は role と storeId しか見ない。店舗IDを改名しても
+ * **storeId は変わらない**ので「変更なし」と判定され、Cookieの中の古い slug が残る。
+ * するとこうなる:
+ *   1. 新しいURLを開く → `proxy.ts` が「Cookieの slug と URL が違う」と見て
+ *      **古いURLへ引き戻す** → その店舗はもう無い → 「店舗が見つかりません」
+ *   2. ログイン画面は `user.storeSlug === storeSlug` で自店判定しているため、
+ *      **自分のアカウントなのに「別のアカウントでログイン中です」**と出る
+ *
+ * 改名は数年に一度の操作なので、**毎リクエストで引き直さない**。
+ * 45分ごとのトークン更新（/api/session/token）でだけ合わせ直せば十分で、
+ * 利用者から見れば「新しいQRを読んだら、そのまま入れた」になる。
+ */
+export async function refreshStoreSlug(session: SessionUser): Promise<SessionUser> {
+  if (!session.storeId) return session;
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('stores')
+    .select('slug')
+    .eq('id', session.storeId)
+    .maybeSingle<{ slug: string }>();
+
+  if (error) throw new SessionCheckUnavailable(error.message);
+  // 店舗が消えていた場合はここでは判断しない（呼び出し元の責務を増やさない）
+  if (!data || data.slug === session.storeSlug) return session;
+
+  return { ...session, storeSlug: data.slug };
+}
+
+/**
+ * 検証後のセッションで Cookie を貼り直す必要があるか。
+ *
+ * 貼り直しを忘れると、次のリクエストでまた古い内容のCookieが送られてくる。
+ * **比較する項目が1つ漏れるだけで「直したのに直らない」状態になる**ため、
+ * 判定をここに出してテストで固定する。
+ * （実際 storeSlug の比較が漏れており、店舗IDを改名すると
+ *   ログイン中の全員が行き止まりに入る状態だった。2026-09-11）
+ */
+export function sessionCookieNeedsRefresh(raw: SessionUser, verified: SessionUser): boolean {
+  return (
+    raw.role !== verified.role ||
+    raw.storeId !== verified.storeId ||
+    raw.storeSlug !== verified.storeSlug
+  );
+}
+
 const UNAVAILABLE = () =>
   NextResponse.json({ error: '一時的に確認できませんでした。時間をおいて再試行してください' }, { status: 503 });
 const FORBIDDEN = () => NextResponse.json({ error: '権限がありません' }, { status: 403 });

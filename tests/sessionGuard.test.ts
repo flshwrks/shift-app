@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { reconcileSession, finalizeSession, type UserRow } from '../lib/sessionGuard';
+import { reconcileSession, finalizeSession, type UserRow, sessionCookieNeedsRefresh } from '../lib/sessionGuard';
 import type { SessionUser } from '../lib/types';
 
 const staff: SessionUser = { id: 'u1', name: '田中', role: 'staff', storeId: 'store-1', storeSlug: 'main' };
@@ -74,5 +74,27 @@ describe('finalizeSession（変更後のセッションの組み立て）', () =
     assert.deepEqual(finalizeSession(staff, 'staff', 'store-2', 'branch'), {
       id: 'u1', name: '田中', role: 'staff', storeId: 'store-2', storeSlug: 'branch',
     });
+  });
+});
+
+// 店舗IDを改名したとき、Cookieを貼り直す判定が漏れていないか（2026-09-11）。
+// 漏れると proxy.ts が古いURLへ引き戻し、ログイン中の全員が行き止まりに入る
+describe('Cookieの貼り直しが必要か', () => {
+  const base = { id: 'u1', name: '山田', role: 'staff' as const, storeId: 's1', storeSlug: 'main' };
+
+  test('何も変わっていなければ貼り直さない', () => {
+    assert.equal(sessionCookieNeedsRefresh(base, { ...base }), false);
+  });
+
+  test('店舗IDを改名したら貼り直す', () => {
+    assert.equal(sessionCookieNeedsRefresh(base, { ...base, storeSlug: 'yokodeli-a7k2p9' }), true);
+  });
+
+  test('権限が変わったら貼り直す', () => {
+    assert.equal(sessionCookieNeedsRefresh(base, { ...base, role: 'admin' }), true);
+  });
+
+  test('所属店舗が変わったら貼り直す', () => {
+    assert.equal(sessionCookieNeedsRefresh(base, { ...base, storeId: 's2' }), true);
   });
 });
