@@ -86,7 +86,11 @@ export async function PATCH(request: Request) {
   }
   if (!data?.length) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 });
 
-  return NextResponse.json({ ok: true });
+  // ★確定した slug を必ず返す★
+  // 入力値にランダムな6文字を足すので、**保存後の値は入力値と違う**。
+  // 返さないと画面は入力値のまま表示してしまい、
+  // 「URLをコピー」が存在しないURLを配る（2026-09-11に実際に起きた）。
+  return NextResponse.json({ ok: true, slug: finalSlug });
 }
 
 export async function DELETE(request: Request) {

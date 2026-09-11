@@ -11,6 +11,8 @@ export default function AdminStoresPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [createdSlug, setCreatedSlug] = useState('');
+  // 改名後の確定値。入力値と変わるうえ、QRの貼り替えが必要になるので必ず知らせる
+  const [renamedSlug, setRenamedSlug] = useState('');
 
   // 追加フォーム
   const [addSlug, setAddSlug] = useState('');
@@ -81,10 +83,16 @@ export default function AdminStoresPage() {
     setEditSaving(false);
     if (!res.ok) { setEditError(body.error ?? '保存に失敗しました'); return; }
     const savedId = editTarget.id;
-    const savedSlug = editSlug.trim();
+    const beforeSlug = editTarget.slug;
+    // ★サーバーが確定した slug を使う★
+    // 入力値をそのまま入れてはいけない。ランダムな6文字が足されるため
+    // 画面の表示と実際の店舗IDがずれ、「URLをコピー」が存在しないURLを配る
+    const savedSlug = typeof body.slug === 'string' ? body.slug : editSlug.trim();
     const savedName = editName.trim();
     setStores(prev => prev.map(s => s.id === savedId ? { ...s, slug: savedSlug, name: savedName } : s));
     setEditTarget(null);
+    // 店舗IDが変わったときは、QRの貼り替えが要ることをその場で伝える
+    if (savedSlug !== beforeSlug) setRenamedSlug(savedSlug);
   };
 
   // 削除
@@ -106,6 +114,7 @@ export default function AdminStoresPage() {
 
   // 作成直後に確定した店舗IDを知らせる（入力値と変わるため）
   const dismissCreated = () => setCreatedSlug('');
+  const dismissRenamed = () => setRenamedSlug('');
 
   // ログイン用URLをコピー（店頭掲示のQRコード運用を想定）
   const copyLoginUrl = (s: Store) => {
@@ -118,6 +127,21 @@ export default function AdminStoresPage() {
 
   return (
     <div>
+      {renamedSlug && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">店舗IDを変更しました</p>
+          <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+            店舗IDは <code className="font-mono font-semibold">{renamedSlug}</code> になりました。
+            入力した値の末尾に、URLを推測されないためのランダムな文字を付けています。
+            <br />
+            <b>古いURLは使えなくなります。</b>下の一覧の「ログインURLをコピー」から新しいURLを取得し、
+            <b>QRコードを作り直して貼り替えてください。</b>
+            <br />
+            ログイン中のスタッフは、新しいURLを開けばそのまま使えます（入り直しは不要です）。
+          </p>
+          <button onClick={dismissRenamed} className="text-xs text-amber-800 underline mt-2">閉じる</button>
+        </div>
+      )}
       {createdSlug && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm font-semibold text-emerald-800">店舗を追加しました</p>
