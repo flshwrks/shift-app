@@ -5,17 +5,13 @@ import { SHIFT_COLORS, type Shift } from '@/lib/types';
 import type { User } from '@/lib/types';
 
 const HOUR_HEIGHT = 64;
-const START_HOUR = 8;
-const END_HOUR = 22;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
-const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const COL_WIDTH = 128;
 const TIME_COL_WIDTH = 44;
 const COUNT_BAR_HEIGHT = 48;
 const HEADER_HEIGHT = 40;
 const MEMO_HEIGHT = 32;
-
-const HOURS = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
+/** 開店直後は1人でも黄色にしない猶予（分）。開始時刻が何時でも「開店から1時間」で判定する */
+const OPENING_GRACE_MINUTES = 60;
 
 interface Props {
   year: number;
@@ -29,6 +25,9 @@ interface Props {
   onConfirm?: (shiftId: string) => void;
   onShiftClick?: (shift: Shift) => void;
   onRequestSlot?: (date: string, startTime: string, endTime: string) => void;
+  /** 店舗ごとの受付時間帯。省略時は 8:00〜22:00（既定値） */
+  startHour?: number;
+  endHour?: number;
 }
 
 function assignLanes(shifts: Shift[]): Map<string, { lane: number; totalLanes: number }> {
@@ -83,18 +82,23 @@ function MemoCell({ value, onChange, expanded }: { value: string; onChange?: (v:
   );
 }
 
-function slotToTime(slotIndex: number): string {
-  const totalMins = START_HOUR * 60 + slotIndex * 30;
-  const h = Math.floor(totalMins / 60);
-  const m = totalMins % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-export default function TimelineView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onShiftClick, onRequestSlot }: Props) {
+export default function TimelineView({ year, month, users, shifts, memos = {}, onMemoChange, isAdmin, currentUserId, onConfirm, onShiftClick, onRequestSlot, startHour = 8, endHour = 22 }: Props) {
   const days = getDaysInMonth(year, month);
   const minWidth = TIME_COL_WIDTH + COL_WIDTH * days.length;
   const [allExpanded, setAllExpanded] = useState(false);
   const hasMemos = Object.values(memos).some(v => v);
+
+  const totalHours = endHour - startHour;
+  const totalHeight = totalHours * HOUR_HEIGHT;
+  const slotCount = totalHours * 2;
+  const HOURS = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
+
+  function slotToTime(slotIndex: number): string {
+    const totalMins = startHour * 60 + slotIndex * 30;
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
 
   const shiftsByDate: Record<string, Shift[]> = {};
   shifts.forEach((s) => {
@@ -104,8 +108,8 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
 
   function getSlotCounts(date: string): number[] {
     const dayShifts = (shiftsByDate[date] ?? []).filter(s => s.shift_type !== 'off');
-    return Array.from({ length: 28 }, (_, i) => {
-      const slotStart = START_HOUR * 60 + i * 30;
+    return Array.from({ length: slotCount }, (_, i) => {
+      const slotStart = startHour * 60 + i * 30;
       const slotEnd = slotStart + 30;
       return dayShifts.filter((s) => {
         const sStart = timeToMinutes(s.start_time);
@@ -117,13 +121,13 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
 
   function slotBg(count: number, i: number): string | null {
     if (count === 0) return 'rgba(239,68,68,0.28)';
-    if (count === 1 && i >= 2) return 'rgba(245,158,11,0.22)';
+    if (count === 1 && i * 30 >= OPENING_GRACE_MINUTES) return 'rgba(245,158,11,0.22)';
     return null;
   }
 
   function barColor(count: number, i: number): string {
     if (count === 0) return '#EF4444';
-    if (count === 1 && i >= 2) return '#F59E0B';
+    if (count === 1 && i * 30 >= OPENING_GRACE_MINUTES) return '#F59E0B';
     return '#22C55E';
   }
 
@@ -200,10 +204,10 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
           <div className="flex">
             <div
               className="flex-shrink-0 sticky left-0 z-10 bg-white border-r border-slate-200 relative"
-              style={{ width: TIME_COL_WIDTH, height: TOTAL_HEIGHT }}
+              style={{ width: TIME_COL_WIDTH, height: totalHeight }}
             >
               {HOURS.map((h) => (
-                <div key={h} className="absolute left-0 right-0" style={{ top: (h - START_HOUR) * HOUR_HEIGHT }}>
+                <div key={h} className="absolute left-0 right-0" style={{ top: (h - startHour) * HOUR_HEIGHT }}>
                   <div className="absolute top-0 left-0 right-0 border-t border-slate-200" />
                   <span className="text-[10px] text-slate-400 tabular-nums pl-1.5 block -translate-y-2 leading-none">{h}:00</span>
                 </div>
@@ -223,7 +227,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                 <div
                   key={dateStr}
                   className={`flex-shrink-0 border-r border-slate-100 relative ${isSun ? 'bg-rose-50/30' : isSat ? 'bg-sky-50/20' : ''}`}
-                  style={{ width: COL_WIDTH, height: TOTAL_HEIGHT }}
+                  style={{ width: COL_WIDTH, height: totalHeight }}
                 >
                   {counts.map((count, i) => {
                     const bg = slotBg(count, i);
@@ -251,18 +255,18 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
 
                   {HOURS.map((h) => (
                     <div key={h} className="absolute left-0 right-0 border-t border-slate-200"
-                      style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />
+                      style={{ top: (h - startHour) * HOUR_HEIGHT }} />
                   ))}
                   {HOURS.slice(0, -1).map((h) => (
                     <div key={`hh${h}`} className="absolute left-0 right-0 border-t border-dashed border-slate-100"
-                      style={{ top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
+                      style={{ top: (h - startHour) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
                   ))}
 
                   {dayShifts.map((s) => {
                     const { lane, totalLanes } = laneMap.get(s.id) ?? { lane: 0, totalLanes: 1 };
                     const startMin = timeToMinutes(s.start_time);
                     const endMin = timeToMinutes(s.end_time);
-                    const top = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                    const top = ((startMin - startHour * 60) / 60) * HOUR_HEIGHT;
                     const height = ((endMin - startMin) / 60) * HOUR_HEIGHT;
                     const w = COL_WIDTH / totalLanes;
                     const l = (lane / totalLanes) * COL_WIDTH;
@@ -348,7 +352,7 @@ export default function TimelineView({ year, month, users, shifts, memos = {}, o
                         backgroundColor: barColor(count, i),
                         height: count === 0 ? 4 : count === 1 ? 12 : Math.min(6 + count * 6, COUNT_BAR_HEIGHT - 4),
                       }}
-                      title={`${8 + Math.floor(i / 2)}:${i % 2 === 0 ? '00' : '30'} — ${count}人`}
+                      title={`${startHour + Math.floor(i / 2)}:${i % 2 === 0 ? '00' : '30'} — ${count}人`}
                     />
                   ))}
                 </div>

@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import AuthLoadingScreen from '@/components/AuthLoadingScreen';
 import { DEFAULT_PATTERNS, parsePatterns, type ShiftPattern } from './shiftPatterns';
+import { parseBusinessHours, type BusinessHours } from './businessHours';
 
 export interface StoreContextValue {
   storeId: string;
@@ -10,6 +11,8 @@ export interface StoreContextValue {
   storeName: string;
   /** 店舗ごとのシフトパターン（未設定なら既定値）。A〜Gの7枠が常に揃う */
   patterns: ShiftPattern[];
+  /** 店舗ごとの受付時間帯（未設定なら 8:00〜22:00） */
+  businessHours: BusinessHours;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -47,17 +50,18 @@ export function StoreProvider({
         //   ここは AuthProvider がJWTを取得し終える前に走るため、匿名として
         //   問い合わせることになり、RLSで0件になって設定が読めなかった
         //   （表示名や時間帯が保存されないように見える不具合の原因）。
-        //   SECURITY DEFINER のRPC経由で、シフト種別だけを読む。
+        //   SECURITY DEFINER のRPC経由で、シフト種別と受付時間帯をまとめて読む。
         // 取得に失敗しても店舗の解決は止めない。設定が読めないだけで
         // シフト画面が開かなくなるほうが困るため、既定値で続行する。
-        const { data: raw } = await supabase.rpc('get_shift_patterns', { p_store_slug: storeSlug });
+        const { data: raw } = await supabase.rpc('get_store_public_settings', { p_store_slug: storeSlug });
         if (cancelled) return;
 
         setState({
           storeId: data.id,
           storeSlug,
           storeName: data.name,
-          patterns: parsePatterns(typeof raw === 'string' ? raw : null),
+          patterns: parsePatterns(typeof raw?.shift_patterns === 'string' ? raw.shift_patterns : null),
+          businessHours: parseBusinessHours(typeof raw?.business_hours === 'string' ? raw.business_hours : null),
         });
       });
 

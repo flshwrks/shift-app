@@ -16,7 +16,7 @@ type ViewMode = 'table' | 'timeline';
 
 export default function StaffSchedulePage() {
   const { user: authUser } = useAuth();
-  const { storeId } = useStore();
+  const { storeId, businessHours } = useStore();
   const { year, month, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth } = usePersistedMonth('month_staff_schedule');
   const [view, setView] = useState<ViewMode>('table');
   const [users, setUsers] = useState<User[]>([]);
@@ -120,7 +120,7 @@ export default function StaffSchedulePage() {
 
       {view === 'table'
         ? <TableView ref={tableRef} year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} exportMode={exporting} onShiftClick={s => setDetailShift(s)} />
-        : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} onShiftClick={s => setDetailShift(s)} />}
+        : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} currentUserId={authUser?.id} onShiftClick={s => setDetailShift(s)} startHour={businessHours.startHour} endHour={businessHours.endHour} />}
 
       {detailShift && (
         <ShiftDetailModal

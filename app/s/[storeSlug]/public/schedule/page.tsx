@@ -55,7 +55,7 @@ interface PublicShiftRow {
 // URLを知っていれば誰でも読めるため、メモに個人的な内容を書かない運用が前提。
 // シフトごとの comment は引き続き公開しない（こちらは方針を変えていない）。
 export default function PublicSchedulePage() {
-  const { storeSlug, storeName } = useStore();
+  const { storeSlug, storeName, businessHours } = useStore();
   const { year, month, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth } = usePersistedMonth('month_public_schedule');
   const [view, setView] = useState<ViewMode>('table');
   const [users, setUsers] = useState<User[]>([]);
@@ -156,7 +156,7 @@ export default function PublicSchedulePage() {
         ) : view === 'table' ? (
           <TableView year={year} month={month} users={users} shifts={shifts} memos={memos} onShiftClick={s => setDetailShift(s)} />
         ) : (
-          <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onShiftClick={s => setDetailShift(s)} />
+          <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onShiftClick={s => setDetailShift(s)} startHour={businessHours.startHour} endHour={businessHours.endHour} />
         )}
       </main>
 

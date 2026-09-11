@@ -1,10 +1,10 @@
 import { DAY_NAMES_JA } from './types';
 
-export function generateTimeSlots(): string[] {
+export function generateTimeSlots(startHour = 8, endHour = 22): string[] {
   const slots: string[] = [];
-  for (let hour = 8; hour <= 22; hour++) {
+  for (let hour = startHour; hour <= endHour; hour++) {
     slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    if (hour < 22) slots.push(`${hour.toString().padStart(2, '0')}:30`);
+    if (hour < endHour) slots.push(`${hour.toString().padStart(2, '0')}:30`);
   }
   return slots;
 }

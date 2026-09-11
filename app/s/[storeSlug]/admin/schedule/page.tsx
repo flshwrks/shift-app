@@ -217,7 +217,7 @@ function ShiftModal({
 
 export default function AdminSchedulePage() {
   const { user: authUser } = useAuth();
-  const { storeId } = useStore();
+  const { storeId, businessHours } = useStore();
   const { year, month, prevMonth, nextMonth, goToCurrentMonth, isCurrentMonth } = usePersistedMonth('month_admin_schedule');
   const { tableRef, exporting, handleExportImage } = useTableExport(year, month);
   const [view, setView] = useState<ViewMode>('table');
@@ -421,7 +421,7 @@ export default function AdminSchedulePage() {
 
       {view === 'table'
         ? <TableView ref={tableRef} year={year} month={month} users={users} shifts={shifts} memos={memos} onMemoChange={handleMemoChange} isAdmin exportMode={exporting} onConfirm={handleConfirm} onCellClick={handleCellClick} onShiftClick={s => setDetailShift(s)} />
-        : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onMemoChange={handleMemoChange} isAdmin onConfirm={handleConfirm} onShiftClick={s => setDetailShift(s)} onRequestSlot={(date, startTime, endTime) => setRequestModal({ date, startTime, endTime })} />}
+        : <TimelineView year={year} month={month} users={users} shifts={shifts} memos={memos} onMemoChange={handleMemoChange} isAdmin onConfirm={handleConfirm} onShiftClick={s => setDetailShift(s)} onRequestSlot={(date, startTime, endTime) => setRequestModal({ date, startTime, endTime })} startHour={businessHours.startHour} endHour={businessHours.endHour} />}
 
       {modal && (
         <ShiftModal

@@ -10,6 +10,10 @@ import {
   serializePatterns, validatePatterns, type ShiftPattern,
 } from '@/lib/shiftPatterns';
 import { netWorkMinutes, formatTotalHours, generateTimeSlots } from '@/lib/shifts';
+import {
+  MIN_HOUR, MAX_HOUR, validateBusinessHours, serializeBusinessHours, countOutOfRange,
+  type BusinessHours,
+} from '@/lib/businessHours';
 import { IconChevronLeft } from '@/components/icons';
 
 // シフト種別の編集。設定画面から遷移してくる専用ページ。
@@ -20,11 +24,12 @@ import { IconChevronLeft } from '@/components/icons';
 // ★記号(A〜G)は一度割り当てたら変えない。並べ替えても記号は動かない。
 //   shifts.shift_type に保存されているのがこの記号のため（lib/shiftPatterns.ts）。
 
-const TIME_SLOTS = generateTimeSlots();
+/** 受付時間帯の開始・終了に選べる「時」の一覧（0〜24） */
+const HOUR_OPTIONS = Array.from({ length: MAX_HOUR - MIN_HOUR + 1 }, (_, i) => MIN_HOUR + i);
 
 export default function ShiftTypesPage() {
   const router = useRouter();
-  const { storeId, storeSlug } = useStore();
+  const { storeId, storeSlug, businessHours } = useStore();
   const initial = useShiftPatterns();
 
   const [rows, setRows] = useState<ShiftPattern[]>(initial.map(p => ({ ...p })));
@@ -32,6 +37,81 @@ export default function ShiftTypesPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  // ===== 受付時間帯 =====
+  // 保存済みの値は savedHours で持つ（useStore() の businessHours は保存後も
+  // 再読み込みまで更新されないため、dirty判定・保存後の表示はこちらを基準にする）。
+  const [savedHours, setSavedHours] = useState<BusinessHours>(businessHours);
+  const [startHour, setStartHour] = useState(businessHours.startHour);
+  const [endHour, setEndHour] = useState(businessHours.endHour);
+  const [hoursSaving, setHoursSaving] = useState(false);
+  const [hoursError, setHoursError] = useState('');
+  const [hoursSaved, setHoursSaved] = useState(false);
+  // null = 警告なし。0以上 = 保存前チェックで見つかった、はみ出すシフトの件数（確認待ち）
+  const [pendingOutOfRange, setPendingOutOfRange] = useState<number | null>(null);
+
+  const hoursDirty = startHour !== savedHours.startHour || endHour !== savedHours.endHour;
+
+  // シフト種別の時刻はこの時間帯の中から選ぶ。時間帯を変えるとここも連動する。
+  //
+  // ★いま使われている時刻は、範囲外でも必ず選択肢に残すこと★
+  //   時間帯を狭めると、既存のシフト種別の時刻（例: 07:00）が選択肢から消える。
+  //   <select> は値に一致する option が無いと**先頭の項目を表示してしまう**ため、
+  //   「画面は 08:00 と出ているのに中身は 07:00」という食い違いが起きる。
+  //   利用者はそれに気づけないまま別の項目を直して保存することになる。
+  const TIME_SLOTS = (() => {
+    const base = generateTimeSlots(startHour, endHour);
+    const inUse = rows.flatMap(p => [p.start, p.end]).filter(t => t && !base.includes(t));
+    // HH:MM は0埋めなので、辞書順の並べ替えで時刻順になる
+    return [...new Set([...base, ...inUse])].sort();
+  })();
+
+  const touchHours = (patch: Partial<{ startHour: number; endHour: number }>) => {
+    if ('startHour' in patch) setStartHour(patch.startHour!);
+    if ('endHour' in patch) setEndHour(patch.endHour!);
+    setHoursSaved(false);
+    setHoursError('');
+    setPendingOutOfRange(null);
+  };
+
+  const attemptSaveHours = async () => {
+    setHoursError('');
+    const result = validateBusinessHours(startHour, endHour);
+    if (!result.ok) { setHoursError(result.reason); return; }
+
+    setHoursSaving(true);
+    // 対象シフトはこの店舗の分だけ。既存の他クエリと同じく store_id で絞る
+    const { data: shiftsData, error: fetchError } = await supabase
+      .from('shifts')
+      .select('start_time, end_time, shift_type')
+      .eq('store_id', storeId);
+    if (fetchError) {
+      setHoursSaving(false);
+      setHoursError(fetchError.message);
+      return;
+    }
+    const outOfRange = countOutOfRange(shiftsData ?? [], { startHour, endHour });
+    setHoursSaving(false);
+    if (outOfRange > 0) {
+      setPendingOutOfRange(outOfRange);
+      return;
+    }
+    await commitSaveHours();
+  };
+
+  const commitSaveHours = async () => {
+    setHoursSaving(true);
+    // app_settingsの主キーは(store_id, key)の複合キーなのでonConflictを明示する
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ store_id: storeId, key: 'business_hours', value: serializeBusinessHours({ startHour, endHour }) },
+              { onConflict: 'store_id,key' });
+    setHoursSaving(false);
+    setPendingOutOfRange(null);
+    if (error) { setHoursError(error.message); return; }
+    setSavedHours({ startHour, endHour });
+    setHoursSaved(true);
+  };
 
   const dirty = JSON.stringify(rows) !== JSON.stringify(initial);
   const canAdd = nextAvailableKey(rows) !== null;
@@ -66,6 +146,66 @@ export default function ShiftTypesPage() {
       >
         <IconChevronLeft className="w-4 h-4" />設定に戻る
       </button>
+
+      <h2 className="text-lg font-semibold tracking-tight text-slate-900">受付時間帯</h2>
+      <p className="text-sm text-slate-500 mt-1 mb-3 leading-relaxed">
+        スタッフがシフトを入力できる時間帯です。日をまたぐシフトは登録できません（終了は24:00まで）。
+      </p>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 mb-6">
+        <div className="flex items-center gap-2">
+          <select
+            value={startHour}
+            onChange={e => touchHours({ startHour: Number(e.target.value) })}
+            aria-label="受付開始時刻"
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}時</option>)}
+          </select>
+          <span className="text-slate-400 text-sm">〜</span>
+          <select
+            value={endHour}
+            onChange={e => touchHours({ endHour: Number(e.target.value) })}
+            aria-label="受付終了時刻"
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}時</option>)}
+          </select>
+        </div>
+
+        {hoursError && <p className="text-xs text-red-600 mt-2">{hoursError}</p>}
+
+        {pendingOutOfRange !== null ? (
+          <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-2.5">
+            <p className="text-xs text-amber-800 leading-relaxed">
+              この時間帯にすると、すでに入っているシフト{pendingOutOfRange}件が表示範囲から外れます。
+            </p>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={commitSaveHours}
+                disabled={hoursSaving}
+                className="px-2.5 py-1 rounded-md bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50"
+              >{hoursSaving ? '保存中…' : 'この内容で保存する'}</button>
+              <button
+                onClick={() => setPendingOutOfRange(null)}
+                className="px-2.5 py-1 rounded-md border border-slate-300 text-slate-600 text-xs hover:bg-white"
+              >やめる</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              onClick={attemptSaveHours}
+              disabled={hoursSaving || !hoursDirty}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600"
+            >
+              {hoursSaving ? '確認中…' : '保存する'}
+            </button>
+            {hoursSaved && <span className="text-xs text-emerald-600">保存しました</span>}
+            {!hoursSaved && hoursDirty && <span className="text-xs text-amber-600">未保存の変更があります</span>}
+          </div>
+        )}
+      </div>
 
       <h2 className="text-lg font-semibold tracking-tight text-slate-900">シフト種別の編集</h2>
       <p className="text-sm text-slate-500 mt-1 mb-4 leading-relaxed">
