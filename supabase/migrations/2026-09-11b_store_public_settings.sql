@@ -47,8 +47,14 @@ $$;
 -- 匿名実行を許可する（店舗IDは推測不能化済み＝F-6）
 grant execute on function public.get_store_public_settings(text) to anon, authenticated;
 
+-- 関数を作っても PostgREST のスキーマキャッシュが古いままだと
+-- 「Could not find the function ... in the schema cache」で呼べない。
+-- 2026-09-11 に実際にこれで空振りしたので、適用のたびに必ず入れる。
+notify pgrst, 'reload schema';
+
 commit;
 
+-- ★これが期待どおり返るまで「適用済み」とみなさないこと★
 -- 確認:
 --   select public.get_store_public_settings('店舗ID');
 --     → 未設定の店舗は {} 、設定済みなら {"shift_patterns": "...", "business_hours": "..."}
