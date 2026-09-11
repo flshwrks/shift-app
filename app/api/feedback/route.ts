@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession, requireAdmin } from '@/lib/sessionGuard';
 import { createAdminClient } from '@/lib/supabaseAdmin';
+import { recordError } from '@/lib/errorLog';
 import { isHqRole } from '@/lib/types';
 import type { FeedbackCategory, FeedbackDestination, FeedbackStatus } from '@/lib/types';
 
@@ -22,8 +23,18 @@ const BODY_ERROR = `内容は${BODY_MIN}〜${BODY_MAX}文字で入力してく�
 const RATE_LIMIT_WINDOW_HOURS = 24;
 const RATE_LIMIT_MAX = 10;
 
-// リポジトリ名は環境変数で上書き可能にし、既定値をこのリポジトリにする
-const GITHUB_REPO = process.env.GITHUB_FEEDBACK_REPO || 'flshwrks/shift-app';
+// 要望の置き場所。**必ず非公開リポジトリを指すこと。**
+//
+// ★2026-09-11の点検(SEC-1/F-12)で見つかった穴★
+//   既定値がアプリ本体の**公開**リポジトリだった。スタッフが「開発者へ」で
+//   送った自由記述の本文が、審査を挟まずインターネット上の誰でも読める場所に
+//   恒久的に載る状態だった（Issueのタイトルにも本文の冒頭が入る）。
+//   氏名・店舗名を構造化フィールドから除く作り込みはしてあったが、
+//   **「利用者が何でも書ける欄」からの漏洩**が対策の範囲外になっていた。
+//
+//   既定値を専用の非公開リポジトリに変えたので、環境変数を設定し忘れても
+//   公開側には落ちない。**この既定値を公開リポジトリに戻さないこと。**
+const GITHUB_REPO = process.env.GITHUB_FEEDBACK_REPO || 'flshwrks/shift-app-feedback';
 
 function parseFeedbackPayload(body: unknown) {
   const b = body as Record<string, unknown> | null;
@@ -113,8 +124,21 @@ export async function POST(request: Request) {
       });
     } catch (e) {
       // Issue作成に失敗しても要望自体は保存済みなので処理を継続する。
-      // ユーザーには失敗を見せず、サーバーログにのみ残す
+      // ユーザーには失敗を見せない（送る側にはどうにもできない失敗なので）。
+      //
+      // ★ただし本部には気づかせる★
+      // 以前はサーバーログに出すだけだったので、**置き場所を移したのに
+      // トークンが新しいリポジトリに届いていない**ような設定ミスが起きても、
+      // 要望が黙ってGitHubに出なくなるだけで誰も気づけなかった。
+      // 「エラーの記録」に載せて、本部の画面から見えるようにする
+      const detail = e instanceof Error ? e.message : String(e);
       console.error('[feedback] GitHub Issue作成に失敗しました', e);
+      void recordError({
+        source: 'server',
+        message: `要望のIssue作成に失敗しました（送信先: ${GITHUB_REPO}）: ${detail}`,
+        path: '/api/feedback',
+        appVersion,
+      }, session, null);
     }
     if (githubIssueNumber !== null) {
       const { error: updateError } = await admin

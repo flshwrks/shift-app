@@ -765,14 +765,23 @@ export default function ShiftsPage() {
               <span className={`text-xs ${editShift.shiftType === 'off' ? 'text-white/80' : 'text-slate-400'}`}>休暇・公休など</span>
             </button>
 
-            {/* コメント */}
+            {/* コメント。
+                このコメントはシフト表に本文が出るため、**同じ店舗の同僚にも見える**
+                （2026-08-25 に意図して入れた表示。仕様として維持する判断＝2026-09-11）。
+                書く側がそれを知らないまま私的なことを書けてしまうのが問題なので、
+                ヘルプだけでなく**書く場所そのもの**に出す。
+                ログイン不要の公開シフト表には出ない（get_public_shifts が列を絞っている）。 */}
             <input
               type="text"
               placeholder="コメント（任意）"
               value={editShift.comment}
               onChange={e => setEditShift(ev => ({ ...ev, comment: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-300"
+              className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder:text-slate-300"
             />
+            <p className="text-[11px] text-slate-500 mt-1.5 mb-4 leading-relaxed">
+              コメントは<b className="text-slate-600">シフト表に出るので、同じ店舗の人にも見えます</b>。
+              人に見られたくないことは書かないでください。
+            </p>
 
             {editError && <p className="text-red-500 text-sm mb-2 text-center">{editError}</p>}
 

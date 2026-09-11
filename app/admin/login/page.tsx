@@ -2,24 +2,26 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
 import { isHqRole } from '@/lib/types';
 import BrandMark from '@/components/BrandMark';
 import SessionEndedNotice from '@/components/SessionEndedNotice';
 import PinPad, { applyPinKey } from '@/components/PinPad';
 
-interface HqAdminUser {
-  id: string;
-  name: string;
-}
-
 // 本部管理者専用のログイン画面。既存 /login のPIN入力UX（4桁ドット・テンキー・
-// 失敗時シェイク）をそのまま踏襲しつつ、一覧取得とログインAPIだけ本部用に差し替える。
+// 失敗時シェイク）をそのまま踏襲する。
+//
+// ★店舗のログイン画面と違い、名前の一覧を出さない（点検項目 F-13）★
+//   店舗は「名前を選んで押すだけ」でよい。URLに付いたランダム6文字(F-6)が
+//   前段の守りになっていて、そもそもその画面にたどり着けないからである。
+//   一方この画面は会社に1つの固定パスなので、同じことをすると
+//   **最強の権限を持つ人の実名一覧が、誰でも見られる場所に出る**。
+//   本部管理者は2〜3人で自分の名前を覚えているため、入力にしても負担は小さい。
 export default function AdminLoginPage() {
   const { user, login } = useAuth();
   const router = useRouter();
-  const [users, setUsers] = useState<HqAdminUser[]>([]);
-  const [selected, setSelected] = useState<HqAdminUser | null>(null);
+  const [name, setName] = useState('');
+  // 名前を確定して初めてPIN入力へ進む（画面の流れは店舗ログインと同じ）
+  const [entered, setEntered] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
@@ -31,22 +33,18 @@ export default function AdminLoginPage() {
     }
   }, [user, router]);
 
-  useEffect(() => {
-    supabase.rpc('list_hq_admin_users').then(({ data }) => setUsers((data ?? []) as HqAdminUser[]));
-  }, []);
-
   const handleKey = (key: string) => {
     applyPinKey(key, pin, setPin, () => setError(''), (code) => { handleLogin(code); });
   };
 
   const handleLogin = async (enteredPin: string) => {
-    if (!selected) return;
+    if (!entered) return;
     setIsLoading(true);
     try {
       const res = await fetch('/api/hq-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selected.id, pin: enteredPin }),
+        body: JSON.stringify({ name: entered, pin: enteredPin }),
       });
       const body = await res.json().catch(() => ({ ok: false }));
       if (res.ok && body.ok) {
@@ -54,7 +52,8 @@ export default function AdminLoginPage() {
         router.replace('/admin/stores');
       } else {
         setIsShaking(true);
-        setError(res.status === 429 ? 'しばらくしてから再度お試しください' : 'PINコードが違います');
+        // 名前が存在しない場合もここに来る（区別すると名前の有無を確かめられてしまう）
+        setError(res.status === 429 ? 'しばらくしてから再度お試しください' : '名前かPINコードが違います');
         setPin('');
         setTimeout(() => setIsShaking(false), 400);
       }
@@ -63,28 +62,28 @@ export default function AdminLoginPage() {
     }
   };
 
-  if (selected) {
+  if (entered) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
         <div className={`bg-white rounded-2xl border border-slate-200 p-8 w-full max-w-sm ${isShaking ? 'shake' : ''}`}>
           <button
-            onClick={() => { setSelected(null); setPin(''); setError(''); }}
-            className="text-slate-400 text-sm mb-4 hover:text-slate-600 flex items-center gap-1 rounded-md"
+            onClick={() => { setEntered(''); setPin(''); setError(''); }}
+            className="text-slate-500 text-sm mb-4 hover:text-slate-700 flex items-center gap-1 rounded-md py-2 px-1 -ml-1"
           >
             ← 戻る
           </button>
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="text-2xl font-bold text-blue-600">{selected.name[0]}</span>
+              <span className="text-2xl font-bold text-blue-600">{entered[0]}</span>
             </div>
-            <h2 className="text-xl font-bold text-slate-800">{selected.name}</h2>
+            <h2 className="text-xl font-bold text-slate-800">{entered}</h2>
             <p className="text-slate-500 text-sm mt-1">PINコードを入力してください</p>
           </div>
 
           <PinPad pin={pin} error={error} disabled={isLoading} onKey={handleKey} />
 
           <p className="text-center text-xs text-slate-400 mt-5">
-            PINが分からない場合は開発担当者にお尋ねください
+            PINが分からない場合は、もう1人の本部管理者から再発行してもらってください
           </p>
         </div>
       </div>
@@ -102,27 +101,34 @@ export default function AdminLoginPage() {
           <h1 className="text-2xl font-bold text-slate-800">シフト管理</h1>
           <p className="text-slate-500 text-sm mt-2">本部管理者ログイン</p>
         </div>
-        {users.length === 0 ? (
-          <p className="text-center text-slate-400 py-8">本部管理者が登録されていません</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => setSelected(u)}
-                className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 focus-visible:border-slate-400 transition-all text-left group"
-              >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 bg-blue-500">
-                  {u.name[0]}
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800 text-sm">{u.name}</p>
-                  <p className="text-xs text-slate-400">本部管理者</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+        <form
+          onSubmit={e => { e.preventDefault(); const v = name.trim(); if (v) { setEntered(v); setError(''); } }}
+        >
+          <label htmlFor="hq-name" className="block text-xs font-medium text-slate-500 mb-1.5">
+            お名前
+          </label>
+          <input
+            id="hq-name"
+            type="text"
+            value={name}
+            maxLength={20}
+            autoComplete="off"
+            onChange={e => setName(e.target.value)}
+            placeholder="登録されている名前"
+            className="w-full border border-slate-200 rounded-lg px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <button
+            type="submit"
+            disabled={!name.trim()}
+            className="mt-4 w-full h-12 bg-blue-600 text-white rounded-xl font-bold text-base disabled:opacity-40 active:scale-[0.98] transition-transform"
+          >
+            次へ
+          </button>
+        </form>
+        <p className="text-center text-xs text-slate-400 mt-5 leading-relaxed">
+          本部管理者として登録されている名前を入力してください。<br />
+          店舗のスタッフの方は、店舗ごとのログインURLからお入りください。
+        </p>
       </div>
     </div>
   );
