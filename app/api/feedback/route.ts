@@ -130,10 +130,15 @@ export async function POST(request: Request) {
       // 以前はサーバーログに出すだけだったので、**置き場所を移したのに
       // トークンが新しいリポジトリに届いていない**ような設定ミスが起きても、
       // 要望が黙ってGitHubに出なくなるだけで誰も気づけなかった。
-      // 「エラーの記録」に載せて、本部の画面から見えるようにする
+      // 「エラーの記録」に載せて、本部の画面から見えるようにする。
+      //
+      // ★void ではなく await する★
+      // サーバーレスでは応答を返した時点で実行が凍結されうるため、
+      // 投げっぱなしにすると記録が書かれないまま終わることがある。
+      // 記録漏れは「失敗したのに誰も気づけない」に直結するので、ここは待つ。
       const detail = e instanceof Error ? e.message : String(e);
       console.error('[feedback] GitHub Issue作成に失敗しました', e);
-      void recordError({
+      await recordError({
         source: 'server',
         message: `要望のIssue作成に失敗しました（送信先: ${GITHUB_REPO}）: ${detail}`,
         path: '/api/feedback',
@@ -231,8 +236,16 @@ async function createGithubIssue(params: {
   userAgent: string;
 }): Promise<number | null> {
   const token = process.env.GITHUB_TOKEN;
-  // トークン未設定でも要望送信自体は動作させる（ローカル開発・未設定環境向け）
-  if (!token) return null;
+  // トークン未設定でも要望送信自体は動作させる（ローカル開発・未設定環境向け）。
+  //
+  // ★ただし「何も起きない」で終わらせない★
+  // 2026-09-11、送信先を移したあとにIssueが立たず、しかも
+  // **エラーの記録にも何も出ない**という状態になった。この行が
+  // 例外を投げずに null を返すため、呼び出し側の catch に入らないのが原因。
+  // 設定漏れは本番でこそ起きるので、投げて catch に載せる。
+  if (!token) {
+    throw new Error('GITHUB_TOKEN が設定されていません（本番はVercelの環境変数を確認）');
+  }
 
   const { category, body, appVersion, role, userAgent } = params;
   const titlePrefix = category === 'bug' ? '[不具合] ' : '[要望] ';
