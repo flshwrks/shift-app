@@ -626,6 +626,34 @@ XSS（`dangerouslySetInnerHTML` 0件）、公開RPCの返却列、`NEXT_PUBLIC_*
 あちらは「名前を選んで押すだけ」が現場の要件で、URLの推測不能化という前段の守りも効いている。
 **同じ作りだから同じ危険、ではない。** 守りは層で見る。
 
+### ⚠️ PUBLIC への暗黙付与を、また踏んだ（2026-09-11）
+
+最初に書いた revoke は `from anon, authenticated` だけで、**効いていなかった**。
+適用後の確認で `has_function_privilege` が両ロールとも true のままだったことで判明した。
+
+Postgres は関数を作ると EXECUTE を **PUBLIC** に自動付与する（テーブルには無い挙動）。
+anon / authenticated は PUBLIC の権限を暗黙に継承するため、
+**この2ロールだけ revoke しても権限は残る。**
+
+**このプロジェクトは 2026-07-25 に `admin_set_pin` でまったく同じ落とし穴を踏んでおり、
+その教訓が上に書いてある**（「インシデント記録」）。にもかかわらず、
+新しいRPCを書くときに反映できていなかった。
+
+正しい形:
+
+```sql
+revoke execute on function public.list_hq_admin_users() from public, anon, authenticated;
+```
+
+他のRPCも点検したが、同じ誤りは他に無かった
+（`admin_set_pin` と各トリガー関数は `from public` 込みで revoke 済み。
+`verify_login` / `list_login_users` / `get_public_*` / `get_store_public_settings` は
+**意図的に公開**なので revoke 不要）。
+
+**教訓の教訓**: 記録しただけでは再発する。
+`SECURITY DEFINER` の関数を**新しく書くとき**にこの記録へ立ち返る仕組みが要る。
+さしあたり `supabase/schema.sql` 末尾の注記と、この節の両方に書いてある。
+
 ### 適用の順序（重要）
 
 1. **先にアプリをデプロイする**（画面がRPCを呼ばなくなる）

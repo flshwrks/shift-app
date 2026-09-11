@@ -29,12 +29,25 @@
 -- URLの推測不能化という前段の守りも効いている。
 -- ============================================================
 
+-- ★PUBLIC も明示的に revoke すること★
+--   Postgres は関数を作ると EXECUTE を **PUBLIC** に自動付与する（テーブルには無い挙動）。
+--   anon / authenticated は PUBLIC の権限を暗黙に継承するため、
+--   **この2ロールだけ revoke しても権限は残る**。
+--   このプロジェクトは 2026-07-25 に admin_set_pin で同じ落とし穴を踏んでおり
+--   （docs/SECURITY.md のインシデント記録）、その教訓がここに反映できていなかった。
+--   2026-09-11、revoke 後の確認で両ロールとも true のままだったことで再発が判明した。
+
 begin;
 
-revoke execute on function public.list_hq_admin_users() from anon, authenticated;
+revoke execute on function public.list_hq_admin_users() from public, anon, authenticated;
+
+-- PostgREST のスキーマキャッシュを更新する
+notify pgrst, 'reload schema';
 
 commit;
 
+-- ★これが期待どおり返るまで「適用済み」とみなさないこと★
 -- 確認:
---   select has_function_privilege('anon', 'public.list_hq_admin_users()', 'execute');
---   → false になること
+--   select has_function_privilege('anon', 'public.list_hq_admin_users()', 'execute') as anon_exec,
+--          has_function_privilege('authenticated', 'public.list_hq_admin_users()', 'execute') as auth_exec;
+--   → 両方 false になること（片方でも true なら PUBLIC の権限が残っている）
