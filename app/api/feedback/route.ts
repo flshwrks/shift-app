@@ -222,6 +222,21 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
+/**
+ * トークンの「種類」だけを返す。**値は絶対に含めない。**
+ *
+ * 404 が返るとき、「新しいトークンが届いていない」のか
+ * 「再デプロイされておらず古いトークンのまま」なのかが症状で区別できない。
+ * 種類（classic / fine-grained）が分かれば、差し替えが反映されたかが一目で分かる。
+ * 接頭辞はGitHubが公開している書式で、秘密ではない。
+ */
+function tokenKind(token: string): string {
+  if (token.startsWith('github_pat_')) return 'fine-grained';
+  if (token.startsWith('ghp_')) return 'classic';
+  if (token.startsWith('ghs_')) return 'GitHub App';
+  return '不明な形式';
+}
+
 // GitHubにIssueを作成する。
 // ★店舗名・店舗slug・store_id・氏名・user_idは絶対に含めない★
 // このIssueは外部サービス(GitHub)に送られ、リポジトリを見られる誰にでも公開されうる。
@@ -281,7 +296,7 @@ async function createGithubIssue(params: {
     // トークン自体は絶対にログへ出さないこと（Authorizationヘッダは触れない）。
     const detail = await res.text().catch(() => '');
     throw new Error(
-      `GitHub Issue作成に失敗しました (status: ${res.status}, repo: ${GITHUB_REPO}) ${detail.slice(0, 300)}`,
+      `GitHub Issue作成に失敗しました (status: ${res.status}, repo: ${GITHUB_REPO}, token: ${tokenKind(token)}) ${detail.slice(0, 300)}`,
     );
   }
 
